@@ -12,20 +12,83 @@ When running multiple Claude Code agents in parallel (e.g., one working on auth,
 
 ## The Solution
 
-streamctl provides a shared database of **workstreams** - units of work that agents can claim, update, and complete. Think of it like a task board that Claude Code agents can read and write to.
+streamctl provides a **persistent** database of **workstreams** - units of work that survive across sessions. Think of it as long-term memory for your agent coordination.
 
-### Complements Agent Teams with Shared Mailbox
+### How It Complements Agent Teams
 
-If you're using Claude Code's agent teams with a shared mailbox, streamctl adds structure on top:
+[Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) already provide excellent in-session coordination:
+- **Shared task list** with claiming and dependencies
+- **Mailbox** for direct messaging between teammates
+- **Lead/teammate** hierarchy with delegation
 
-| Shared Mailbox | streamctl |
-|----------------|-----------|
-| Free-form messages between agents | Structured workstream records |
-| "Hey, I finished the auth module" | `state: done`, `log: "Implemented JWT auth"` |
-| "Who's working on the API?" | `workstream_list(state="in_progress")` |
-| Messages disappear over time | Persistent database, survives sessions |
+But agent teams are **ephemeral** - when the team ends, everything disappears. This creates problems:
+- Can't resume work the next day
+- Decisions and context are lost
+- No handoff between different team sessions
+- `/resume` doesn't restore teammates
 
-Use both together: the mailbox for quick coordination, streamctl for organized tracking.
+**streamctl adds the persistence layer:**
+
+| Agent Teams (in-session) | streamctl (cross-session) |
+|--------------------------|---------------------------|
+| Task list disappears when team ends | Workstreams persist forever |
+| Mailbox messages are ephemeral | Log entries are permanent |
+| No memory of past decisions | Decisions section preserved |
+| Can't resume teammates | Pick up where you left off |
+
+### Recommended Workflow
+
+**1. Before starting a team session:**
+```
+workstream_list(project="myapp")  # See what work exists
+workstream_get(project="myapp", name="auth-refactor")  # Read context from last session
+```
+
+**2. Create the agent team based on workstreams:**
+```
+"Create an agent team. We have these workstreams to complete:
+- auth-refactor: [paste objective and context from workstream_get]
+- api-endpoints: [paste from another workstream]
+Assign one teammate per workstream."
+```
+
+**3. During the session, teammates use the mailbox for quick coordination:**
+```
+Lead: "Auth teammate, are you blocked on anything?"
+Auth: "Waiting for the User model changes from API teammate"
+```
+
+**4. At key milestones, log to streamctl for persistence:**
+```
+workstream_update(project="myapp", name="auth-refactor",
+  log_entry="Implemented JWT validation. Blocked on User model - API teammate working on it.")
+```
+
+**5. When the team session ends, update states:**
+```
+workstream_update(project="myapp", name="auth-refactor", state="blocked",
+  log_entry="Session ended. JWT done, waiting on User model. Next: integrate with API.")
+workstream_update(project="myapp", name="api-endpoints", state="in_progress",
+  log_entry="User model 80% complete. Continuing tomorrow.")
+```
+
+**6. Next day, new team session picks up with full context:**
+```
+workstream_list(project="myapp", state="in_progress")
+# Shows exactly where each piece of work stands
+```
+
+### When to Use What
+
+| Use Case | Tool |
+|----------|------|
+| Quick coordination during a session | Agent team mailbox |
+| Claiming tasks within a session | Agent team task list |
+| Preserving context across sessions | streamctl workstreams |
+| Recording decisions for future reference | streamctl log entries |
+| Resuming work days later | streamctl |
+| Parallel exploration (research, debugging) | Agent teams |
+| Long-running projects with multiple sessions | streamctl + agent teams |
 
 ## Example: Parallel Feature Development
 
