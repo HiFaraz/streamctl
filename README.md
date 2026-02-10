@@ -14,6 +14,19 @@ When running multiple Claude Code agents in parallel (e.g., one working on auth,
 
 streamctl provides a shared database of **workstreams** - units of work that agents can claim, update, and complete. Think of it like a task board that Claude Code agents can read and write to.
 
+### Complements Agent Teams with Shared Mailbox
+
+If you're using Claude Code's agent teams with a shared mailbox, streamctl adds structure on top:
+
+| Shared Mailbox | streamctl |
+|----------------|-----------|
+| Free-form messages between agents | Structured workstream records |
+| "Hey, I finished the auth module" | `state: done`, `log: "Implemented JWT auth"` |
+| "Who's working on the API?" | `workstream_list(state="in_progress")` |
+| Messages disappear over time | Persistent database, survives sessions |
+
+Use both together: the mailbox for quick coordination, streamctl for organized tracking.
+
 ## Example: Parallel Feature Development
 
 You're building a new feature that needs:
