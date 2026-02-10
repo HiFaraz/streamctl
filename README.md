@@ -1,26 +1,79 @@
 # streamctl
 
-Workstream manager for coordinating parallel Claude Code agents.
+Coordinate parallel Claude Code agents working on the same codebase.
 
-## For Claude Code Agents
+## The Problem
 
-**To set up streamctl in this project, run these commands:**
+When running multiple Claude Code agents in parallel (e.g., one working on auth, another on the API, another on tests), they have no way to:
+- Know what work is available or claimed
+- Avoid stepping on each other's toes
+- Track progress across sessions
+- Hand off work between sessions
 
-```bash
-# Clone and build (skip if ~/streamctl exists)
-if [ ! -f ~/streamctl/streamctl ]; then
-  git clone https://github.com/HiFaraz/streamctl ~/streamctl
-  cd ~/streamctl && go build -o streamctl ./cmd/streamctl
-fi
+## The Solution
 
-# Initialize project-local database
-mkdir -p .streamctl
-~/streamctl/streamctl init
+streamctl provides a shared database of **workstreams** - units of work that agents can claim, update, and complete. Think of it like a task board that Claude Code agents can read and write to.
 
-# Add to Claude Code MCP settings
-# Edit ~/.claude/settings.json and add:
+## Example: Parallel Feature Development
+
+You're building a new feature that needs:
+1. Database schema changes
+2. API endpoints
+3. Frontend components
+4. Tests
+
+Instead of doing these sequentially, create workstreams:
+
+```
+workstream_create(project="myapp", name="db-schema", objective="Add user preferences table")
+workstream_create(project="myapp", name="api-endpoints", objective="CRUD endpoints for preferences")
+workstream_create(project="myapp", name="frontend", objective="Preferences settings page")
+workstream_create(project="myapp", name="tests", objective="Integration tests for preferences")
 ```
 
+Now spin up 4 Claude Code agents. Each one:
+1. Calls `workstream_list` to see available work
+2. Calls `workstream_claim` on an unclaimed workstream
+3. Works on it, logging progress with `workstream_update`
+4. Marks it done and releases it
+
+No conflicts. Clear ownership. Progress persists across sessions.
+
+## Example: Resuming Work
+
+You worked on a feature yesterday but didn't finish. Today:
+
+```
+workstream_list(project="myapp", state="in_progress")
+```
+
+Shows your in-progress work with the log of what you did yesterday. Pick up where you left off.
+
+## Example: Blocked Work
+
+Your API work is blocked waiting for the database schema:
+
+```
+workstream_update(project="myapp", name="api-endpoints", state="blocked", log_entry="Waiting for db-schema to complete")
+```
+
+Another agent (or you tomorrow) can see this is blocked and why.
+
+---
+
+## Setup for Claude Code
+
+```bash
+# Clone and build (one-time)
+git clone https://github.com/HiFaraz/streamctl ~/streamctl
+cd ~/streamctl && go build -o streamctl ./cmd/streamctl
+
+# Initialize in your project
+mkdir -p .streamctl
+~/streamctl/streamctl init
+```
+
+Add to `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
@@ -32,36 +85,35 @@ mkdir -p .streamctl
 }
 ```
 
-After adding to settings, tell the user to restart Claude Code.
+Restart Claude Code. Add `.streamctl/` to your `.gitignore`.
 
 ---
 
-## MCP Tools Available
+## MCP Tools
 
 | Tool | Parameters | Description |
 |------|------------|-------------|
-| `workstream_list` | `project?`, `state?`, `owner?` | List workstreams |
-| `workstream_get` | `project`, `name` | Get full workstream as markdown |
-| `workstream_create` | `project`, `name`, `objective` | Create workstream |
-| `workstream_update` | `project`, `name`, `state?`, `log_entry?`, `plan_index?` | Update workstream |
-| `workstream_claim` | `project`, `name`, `owner` | Claim ownership |
-| `workstream_release` | `project`, `name` | Release ownership |
+| `workstream_list` | `project?`, `state?`, `owner?` | List workstreams, optionally filtered |
+| `workstream_get` | `project`, `name` | Get full workstream details |
+| `workstream_create` | `project`, `name`, `objective` | Create a new workstream |
+| `workstream_update` | `project`, `name`, + `state?`, `log_entry?`, `plan_index?` | Update fields |
+| `workstream_claim` | `project`, `name`, `owner` | Set ownership (use your session ID) |
+| `workstream_release` | `project`, `name` | Clear ownership |
 
-## Workflow
+## Workstream Fields
 
+- **project**: Repository or project name
+- **name**: Descriptive identifier (e.g., "auth-refactor", "fix-bug-123")
+- **state**: `pending` → `in_progress` → `done` (or `blocked`)
+- **owner**: Who's working on it (prevents conflicts)
+- **objective**: One-sentence goal
+- **plan**: Checklist of steps (toggle with `plan_index`)
+- **log**: Timestamped progress entries
+
+## CLI
+
+```bash
+streamctl tui      # Visual dashboard
+streamctl list     # JSON dump of all workstreams
+streamctl help     # Help
 ```
-workstream_create(project, name, objective)  # Create
-workstream_claim(project, name, owner)       # Claim before working
-workstream_update(log_entry="...")           # Log progress
-workstream_update(plan_index=0)              # Toggle plan item
-workstream_update(state="done")              # Mark done
-workstream_release(project, name)            # Release
-```
-
-## States
-
-`pending` → `in_progress` → `done` (or `blocked`)
-
-## Database
-
-Uses `.streamctl/workstreams.db` in the current working directory. Add `.streamctl/` to `.gitignore`.
