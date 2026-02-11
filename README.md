@@ -41,7 +41,7 @@ Clone https://github.com/HiFaraz/streamctl to ~/streamctl if not present, build 
    - At session start: check workstream_list, read context with workstream_get for in_progress work
    - During work: create workstreams for non-trivial features, log progress and decisions
    - At session end: update state and log what's next
-   - Append feedback to ~/streamctl/FEEDBACK.md (create if needed) when you notice friction, have suggestions, or something works well. Format: `### DATE` then `**Type:** friction|suggestion|working-well`, `**Context:**`, `**Feedback:**`
+   - Append feedback to ~/streamctl/FEEDBACK.md (create if needed) when you notice friction, have suggestions, or something works well. Format: `### DATE`, `**Type:** friction|suggestion|working-well`, `**Context:**`, `**Feedback:**`, `**Status:**`
 3. Initialize .streamctl/ in the current project and add to .gitignore
 4. Check for existing workstreams and resume any in_progress work
 ```
