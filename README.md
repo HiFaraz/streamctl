@@ -29,6 +29,22 @@ workstream_list(project="myapp")
 workstream_get(project="myapp", name="auth")  # Full history, decisions, context
 ```
 
+## Quick Start
+
+Paste this into Claude Code:
+
+```
+Clone https://github.com/HiFaraz/streamctl to ~/streamctl if not present, build it, then:
+
+1. Add streamctl MCP server to ~/.claude/settings.json if not already configured
+2. Add to ~/.claude/CLAUDE.md (create if needed) instructions to use workstreams:
+   - At session start: check workstream_list, read context with workstream_get for in_progress work
+   - During work: create workstreams for non-trivial features, log progress and decisions
+   - At session end: update state and log what's next
+3. Initialize .streamctl/ in the current project and add to .gitignore
+4. Check for existing workstreams and resume any in_progress work
+```
+
 ---
 
 ## Examples
@@ -109,52 +125,6 @@ workstream_update(project="myapp", name="auth",
 - Log decisions with rationale ("chose X because Y")
 - Write for your future self - assume no memory
 - Update states honestly - blocked means blocked
-
----
-
-## Setup
-
-```bash
-# Build (one-time)
-git clone https://github.com/HiFaraz/streamctl ~/streamctl
-cd ~/streamctl && go build -o streamctl ./cmd/streamctl
-
-# Initialize in your project
-mkdir -p .streamctl
-~/streamctl/streamctl init
-```
-
-Add to `~/.claude/settings.json`:
-```json
-{
-  "mcpServers": {
-    "streamctl": {
-      "command": "$HOME/streamctl/streamctl",
-      "args": ["serve"]
-    }
-  }
-}
-```
-
-Restart Claude Code. Add `.streamctl/` to `.gitignore`.
-
----
-
-## Quick Start Prompt
-
-Paste this into Claude Code to set up streamctl:
-
-```
-Clone https://github.com/HiFaraz/streamctl to ~/streamctl if not present, build it, then:
-
-1. Add streamctl MCP server to ~/.claude/settings.json if not already configured
-2. Add to ~/.claude/CLAUDE.md (create if needed) instructions to use workstreams:
-   - At session start: check workstream_list, read context with workstream_get for in_progress work
-   - During work: create workstreams for non-trivial features, log progress and decisions
-   - At session end: update state and log what's next
-3. Initialize .streamctl/ in the current project and add to .gitignore
-4. Check for existing workstreams and resume any in_progress work
-```
 
 ---
 
