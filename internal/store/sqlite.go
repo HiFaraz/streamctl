@@ -686,21 +686,24 @@ type SearchResult struct {
 
 // Search searches logs and tasks for a query string
 func (s *Store) Search(project, query, wsFilter string) ([]SearchResult, error) {
-	if query == "" {
+	if query == "" && wsFilter == "" {
 		return []SearchResult{}, nil
 	}
 
 	var results []SearchResult
-	likeQuery := "%" + query + "%"
 
 	// Search log entries
 	logQuery := `
 		SELECT w.name, l.timestamp, l.content
 		FROM log_entries l
 		JOIN workstreams w ON l.workstream_id = w.id
-		WHERE w.project = ? AND l.content LIKE ?`
-	logArgs := []any{project, likeQuery}
+		WHERE w.project = ?`
+	logArgs := []any{project}
 
+	if query != "" {
+		logQuery += " AND l.content LIKE ?"
+		logArgs = append(logArgs, "%"+query+"%")
+	}
 	if wsFilter != "" {
 		logQuery += " AND w.name = ?"
 		logArgs = append(logArgs, wsFilter)
@@ -728,9 +731,13 @@ func (s *Store) Search(project, query, wsFilter string) ([]SearchResult, error) 
 		SELECT w.name, p.position, p.text, p.status
 		FROM plan_items p
 		JOIN workstreams w ON p.workstream_id = w.id
-		WHERE w.project = ? AND (p.text LIKE ? OR p.notes LIKE ?)`
-	taskArgs := []any{project, likeQuery, likeQuery}
+		WHERE w.project = ?`
+	taskArgs := []any{project}
 
+	if query != "" {
+		taskQuery += " AND (p.text LIKE ? OR p.notes LIKE ?)"
+		taskArgs = append(taskArgs, "%"+query+"%", "%"+query+"%")
+	}
 	if wsFilter != "" {
 		taskQuery += " AND w.name = ?"
 		taskArgs = append(taskArgs, wsFilter)
