@@ -90,6 +90,51 @@ workstream_list(project="myapp", state="in_progress")
 | Parallel exploration (research, debugging) | Agent teams |
 | Long-running projects with multiple sessions | streamctl + agent teams |
 
+### Recommended Pattern for Agent Team Leads
+
+**At session start:**
+```
+1. workstream_list(project="myapp")
+   → See all workstreams and their states
+
+2. For each in_progress or pending workstream:
+   workstream_get(project="myapp", name="...")
+   → Read objective, key context, decisions, and logs from previous sessions
+
+3. Create agent team with context:
+   "Create a team to work on these workstreams:
+   - auth-refactor: [paste objective + key context + recent log]
+   - api-endpoints: [paste objective + where we left off]
+   Spawn one teammate per workstream."
+```
+
+**During session:**
+```
+• Teammates coordinate via mailbox (ephemeral, real-time)
+• Lead logs significant milestones to streamctl:
+  - Major decisions with rationale
+  - Completed milestones
+  - Blockers discovered
+
+• Don't log every small step - workstreams are higher-level than tasks
+```
+
+**At session end:**
+```
+For each workstream touched:
+  workstream_update(project="myapp", name="auth-refactor",
+    state="in_progress",  # or "done" or "blocked"
+    log_entry="Completed JWT validation with RS256. Middleware done.
+               Next: integrate with User model from api-endpoints.
+               Decision: Using httpOnly cookies for token storage.")
+```
+
+**Key principles:**
+- **Lead owns streamctl updates** - teammates focus on their work
+- **Log decisions, not just actions** - "chose X because Y" helps future sessions
+- **Write for your future self** - assume no memory of this session
+- **Update states honestly** - blocked means blocked, don't leave things "in_progress" if stuck
+
 ## Example: Parallel Feature Development
 
 You're building a new feature that needs:
