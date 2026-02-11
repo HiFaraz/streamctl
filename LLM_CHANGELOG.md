@@ -26,6 +26,7 @@ Add these new MCP tool parameters to your `~/.claude/CLAUDE.md` workstream docum
 
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
 **Task notes:** Supports markdown (code blocks, lists, links, headers)
+**Log entries:** Also support markdown - use for rich context, code snippets, decision rationale
 ```
 
 ### 2. Rebuild and Restart MCP Server

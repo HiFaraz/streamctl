@@ -66,6 +66,7 @@ workstream_dependencies (blocker_id, blocked_id, created_at)
 
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
 **Task notes:** Supports markdown (code blocks, lists, links, headers)
+**Log entries:** Support markdown for rich context, code snippets, decision rationale
 
 ## TUI Features
 
