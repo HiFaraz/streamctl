@@ -140,38 +140,20 @@ Restart Claude Code. Add `.streamctl/` to `.gitignore`.
 
 ---
 
-## Prompts
+## Quick Start Prompt
 
-### Starting a Session
-
-Paste this to resume work:
+Paste this into Claude Code to set up streamctl:
 
 ```
-Check workstreams for this project using workstream_list. For any in_progress or blocked workstreams, read the full context with workstream_get and resume from where we left off.
-```
+Read ~/streamctl/README.md, then:
 
-### Creating Workstreams
-
-Paste this when starting new work:
-
-```
-Create workstreams for the independent units of work in this task. Use workstream_create with clear objectives. As you work, log significant progress and decisions with workstream_update.
-```
-
-### Ending a Session
-
-Paste this before ending:
-
-```
-Update all workstreams you worked on. Log what was accomplished, decisions made with rationale, and what's next. Set state to done, blocked, or in_progress as appropriate.
-```
-
-### Full Context (for new Claude Code instances)
-
-Paste this once to teach Claude Code about streamctl:
-
-```
-Read ~/streamctl/README.md to learn about workstream tracking. Use the streamctl MCP tools (workstream_list, workstream_get, workstream_create, workstream_update) to persist context across sessions. Check for existing workstreams at session start. Log progress and decisions during work. Update state at session end.
+1. Add streamctl MCP server to ~/.claude/settings.json if not already configured
+2. Add to ~/.claude/CLAUDE.md (create if needed) instructions to use workstreams:
+   - At session start: check workstream_list, read context with workstream_get for in_progress work
+   - During work: create workstreams for non-trivial features, log progress and decisions
+   - At session end: update state and log what's next
+3. Initialize .streamctl/ in the current project and add to .gitignore
+4. Check for existing workstreams and resume any in_progress work
 ```
 
 ---
