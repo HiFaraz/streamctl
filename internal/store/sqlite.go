@@ -701,12 +701,13 @@ func (s *Store) Search(project, query, wsFilter string) ([]SearchResult, error) 
 	logArgs := []any{project}
 
 	if query != "" {
-		logQuery += " AND l.content LIKE ?"
+		logQuery += " AND LOWER(l.content) LIKE LOWER(?)"
 		logArgs = append(logArgs, "%"+query+"%")
 	}
 	if wsFilter != "" {
-		logQuery += " AND w.name = ?"
-		logArgs = append(logArgs, wsFilter)
+		// Case-insensitive partial match on workstream name
+		logQuery += " AND LOWER(w.name) LIKE LOWER(?)"
+		logArgs = append(logArgs, "%"+wsFilter+"%")
 	}
 	logQuery += " ORDER BY l.timestamp DESC LIMIT 50"
 
@@ -735,12 +736,13 @@ func (s *Store) Search(project, query, wsFilter string) ([]SearchResult, error) 
 	taskArgs := []any{project}
 
 	if query != "" {
-		taskQuery += " AND (p.text LIKE ? OR p.notes LIKE ?)"
+		taskQuery += " AND (LOWER(p.text) LIKE LOWER(?) OR LOWER(p.notes) LIKE LOWER(?))"
 		taskArgs = append(taskArgs, "%"+query+"%", "%"+query+"%")
 	}
 	if wsFilter != "" {
-		taskQuery += " AND w.name = ?"
-		taskArgs = append(taskArgs, wsFilter)
+		// Case-insensitive partial match on workstream name
+		taskQuery += " AND LOWER(w.name) LIKE LOWER(?)"
+		taskArgs = append(taskArgs, "%"+wsFilter+"%")
 	}
 	taskQuery += " ORDER BY w.name, p.position LIMIT 50"
 
