@@ -32,8 +32,7 @@ The database schema auto-migrates on startup. You must:
 
 ```bash
 cd ~/streamctl
-go build -o streamctl ./cmd/streamctl
-# Then restart your MCP server (close and reopen Claude Code, or restart the streamctl process)
+make restart
 ```
 
 The migration automatically:
