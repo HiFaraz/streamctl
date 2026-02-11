@@ -78,6 +78,10 @@
             flex: 1;
             overflow-y: auto;
             padding: 16px;
+            outline: none;
+        }
+
+        .main-content {
             max-width: 800px;
         }
 
@@ -318,68 +322,70 @@
         {{if .Workstream.Owner}}<span style="color: var(--text-muted);">Owner: {{.Workstream.Owner}}</span>{{end}}
     </header>
 
-    <main class="main">
-        {{if .Workstream.Objective}}
-        <section class="section">
-            <h2 class="section-title">Objective</h2>
-            <p class="section-content">{{.Workstream.Objective}}</p>
-        </section>
-        {{end}}
+    <main class="main" id="main" tabindex="0">
+        <div class="main-content">
+            {{if .Workstream.Objective}}
+            <section class="section">
+                <h2 class="section-title">Objective</h2>
+                <p class="section-content">{{.Workstream.Objective}}</p>
+            </section>
+            {{end}}
 
-        {{if .Workstream.BlockedBy}}
-        <section class="section">
-            <h2 class="section-title">Blocked By</h2>
-            <div class="dep-list">
-                {{range .Workstream.BlockedBy}}
-                <span class="dep-item">{{.BlockerProject}}/{{.BlockerName}}</span>
-                {{end}}
-            </div>
-        </section>
-        {{end}}
+            {{if .Workstream.BlockedBy}}
+            <section class="section">
+                <h2 class="section-title">Blocked By</h2>
+                <div class="dep-list">
+                    {{range .Workstream.BlockedBy}}
+                    <span class="dep-item">{{.BlockerProject}}/{{.BlockerName}}</span>
+                    {{end}}
+                </div>
+            </section>
+            {{end}}
 
-        {{if .Workstream.Plan}}
-        <section class="section">
-            <h2 class="section-title">Tasks ({{len .Workstream.Plan}})</h2>
-            <div>
-                {{range .Workstream.Plan}}
-                <div class="task task-{{.Status}}">
-                    <span class="task-check">
-                        {{if eq .Status "done"}}✓{{else if eq .Status "in_progress"}}▸{{else if eq .Status "skipped"}}—{{end}}
-                    </span>
-                    <div class="task-body">
-                        <div class="task-text">{{.Text}}</div>
-                        {{if .Notes}}<div class="task-notes">{{.Notes}}</div>{{end}}
+            {{if .Workstream.Plan}}
+            <section class="section">
+                <h2 class="section-title">Tasks ({{len .Workstream.Plan}})</h2>
+                <div>
+                    {{range .Workstream.Plan}}
+                    <div class="task task-{{.Status}}">
+                        <span class="task-check">
+                            {{if eq .Status "done"}}✓{{else if eq .Status "in_progress"}}▸{{else if eq .Status "skipped"}}—{{end}}
+                        </span>
+                        <div class="task-body">
+                            <div class="task-text">{{.Text}}</div>
+                            {{if .Notes}}<div class="task-notes">{{.Notes}}</div>{{end}}
+                        </div>
                     </div>
+                    {{end}}
                 </div>
-                {{end}}
-            </div>
-        </section>
-        {{end}}
+            </section>
+            {{end}}
 
-        {{if .Workstream.Log}}
-        <section class="section">
-            <h2 class="section-title">Log ({{len .Workstream.Log}})</h2>
-            <div>
-                {{range .Workstream.Log}}
-                <div class="log-entry">
-                    <div class="log-time">{{.Timestamp.Format "2006-01-02 15:04"}}</div>
-                    <div class="log-content">{{.Content}}</div>
+            {{if .Workstream.Log}}
+            <section class="section">
+                <h2 class="section-title">Log ({{len .Workstream.Log}})</h2>
+                <div>
+                    {{range .Workstream.Log}}
+                    <div class="log-entry">
+                        <div class="log-time">{{.Timestamp.Format "2006-01-02 15:04"}}</div>
+                        <div class="log-content">{{.Content}}</div>
+                    </div>
+                    {{end}}
                 </div>
-                {{end}}
-            </div>
-        </section>
-        {{end}}
+            </section>
+            {{end}}
 
-        {{if .Workstream.Blocks}}
-        <section class="section">
-            <h2 class="section-title">Blocks</h2>
-            <div class="dep-list">
-                {{range .Workstream.Blocks}}
-                <span class="dep-item">{{.BlockedProject}}/{{.BlockedName}}</span>
-                {{end}}
-            </div>
-        </section>
-        {{end}}
+            {{if .Workstream.Blocks}}
+            <section class="section">
+                <h2 class="section-title">Blocks</h2>
+                <div class="dep-list">
+                    {{range .Workstream.Blocks}}
+                    <span class="dep-item">{{.BlockedProject}}/{{.BlockedName}}</span>
+                    {{end}}
+                </div>
+            </section>
+            {{end}}
+        </div>
     </main>
 
     <footer class="status-bar">
@@ -522,13 +528,19 @@
                 return;
             }
 
+            const main = document.getElementById('main');
             switch (e.key) {
                 case 'Backspace': window.location.href = '/'; e.preventDefault(); break;
                 case 'g': pendingG = true; setTimeout(() => pendingG = false, 1000); break;
                 case '?': toggleHelp(); e.preventDefault(); break;
                 case '/': openPalette(); e.preventDefault(); break;
+                case 'ArrowDown': case 'j': main.scrollBy(0, 100); e.preventDefault(); break;
+                case 'ArrowUp': case 'k': main.scrollBy(0, -100); e.preventDefault(); break;
             }
         });
+
+        // Focus main on load for keyboard scrolling
+        document.getElementById('main').focus();
     </script>
 </body>
 </html>

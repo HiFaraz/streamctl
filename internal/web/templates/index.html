@@ -478,8 +478,8 @@
             }
 
             switch (e.key) {
-                case '.': selectItem(selectedIndex + 1); e.preventDefault(); break;
-                case ',': selectItem(selectedIndex - 1); e.preventDefault(); break;
+                case 'ArrowDown': case '.': selectItem(selectedIndex + 1); e.preventDefault(); break;
+                case 'ArrowUp': case ',': selectItem(selectedIndex - 1); e.preventDefault(); break;
                 case 'Enter': openSelected(); e.preventDefault(); break;
                 case 'g': pendingG = true; setTimeout(() => pendingG = false, 1000); break;
                 case 'r': refresh(); e.preventDefault(); break;
