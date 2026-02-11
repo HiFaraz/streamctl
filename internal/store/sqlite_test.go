@@ -640,7 +640,7 @@ func TestRecentActivity(t *testing.T) {
 	logEntry := "Newest entry"
 	s.Update("proj", "ws1", WorkstreamUpdate{LogEntry: &logEntry})
 
-	activity, err := s.RecentActivity("proj", 10)
+	activity, err := s.RecentActivity("proj", 10, 0)
 	if err != nil {
 		t.Fatalf("RecentActivity() error = %v", err)
 	}

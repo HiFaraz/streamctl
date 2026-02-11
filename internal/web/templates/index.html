@@ -137,6 +137,58 @@
             color: var(--text-muted);
         }
 
+        /* Load more */
+        .load-more {
+            padding: 16px;
+            text-align: center;
+        }
+        .load-more-btn {
+            padding: 8px 24px;
+            font-family: inherit;
+            font-size: 13px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .load-more-btn:hover { background: var(--bg-hover); }
+        .load-more-btn:disabled { opacity: 0.5; cursor: default; }
+
+        /* Palette actions */
+        .palette-action {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+        .palette-action:hover,
+        .palette-action.selected {
+            background: var(--focus);
+            color: white;
+        }
+        .palette-action-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+        .palette-action-text { flex: 1; }
+        .palette-action-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .palette-action.selected .palette-action-hint { color: rgba(255,255,255,0.7); }
+
+        .palette-section {
+            padding: 8px 16px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+        }
+
         /* Status bar */
         .status-bar {
             display: flex;
@@ -307,13 +359,18 @@
             No activity yet. Workstream log entries will appear here.
         </div>
         {{end}}
+        {{if .HasMore}}
+        <div class="load-more" id="load-more">
+            <button class="load-more-btn" onclick="loadMore()">Load more</button>
+        </div>
+        {{end}}
     </main>
 
     <footer class="status-bar">
         <div class="status-shortcuts">
-            <span><kbd>,</kbd> <kbd>.</kbd> navigate</span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
             <span><kbd>Enter</kbd> open</span>
-            <span><kbd>/</kbd> jump</span>
+            <span><kbd>/</kbd> search/jump</span>
             <span><kbd>?</kbd> help</span>
         </div>
         <div class="live-indicator">
@@ -325,7 +382,7 @@
     <!-- Command palette -->
     <div class="palette" id="palette">
         <div class="palette-content">
-            <input type="text" class="palette-input" id="palette-input" placeholder="Jump to workstream..." autocomplete="off">
+            <input type="text" class="palette-input" id="palette-input" placeholder="Type to jump, or select action..." autocomplete="off">
             <div class="palette-results" id="palette-results"></div>
         </div>
     </div>
@@ -334,9 +391,9 @@
     <div class="help-modal" id="help-modal">
         <div class="help-content">
             <h2>Keyboard Shortcuts</h2>
-            <div class="help-row"><span>Navigate feed</span><span><kbd>,</kbd> <kbd>.</kbd></span></div>
+            <div class="help-row"><span>Navigate feed</span><span><kbd>↑</kbd> <kbd>↓</kbd></span></div>
             <div class="help-row"><span>Open workstream</span><span><kbd>Enter</kbd></span></div>
-            <div class="help-row"><span>Jump to workstream</span><span><kbd>/</kbd></span></div>
+            <div class="help-row"><span>Search / Jump</span><span><kbd>/</kbd></span></div>
             <div class="help-row"><span>Go home</span><span><kbd>g</kbd> <kbd>h</kbd></span></div>
             <div class="help-row"><span>Refresh</span><span><kbd>r</kbd></span></div>
             <div class="help-row"><span>Close / Help</span><span><kbd>?</kbd> <kbd>Esc</kbd></span></div>
@@ -347,12 +404,19 @@
         let selectedIndex = 0;
         let pendingG = false;
         let paletteSelectedIndex = 0;
+        let paletteMode = 'actions'; // 'actions' or 'jump'
         let filteredWorkstreams = [];
+        let currentOffset = {{len .Activity}};
 
         const workstreams = [
             {{range .Workstreams}}
             { name: "{{.Name}}", state: "{{.State}}", needsHelp: {{.NeedsHelp}} },
             {{end}}
+        ];
+
+        const paletteActions = [
+            { id: 'search', icon: '⌕', label: 'Search all logs and tasks', hint: 'ws:name to filter' },
+            { id: 'jump', icon: '→', label: 'Jump to workstream', hint: 'quick navigation' },
         ];
 
         function getFeedItems() {
@@ -386,66 +450,107 @@
             const input = document.getElementById('palette-input');
             palette.classList.add('visible');
             input.value = '';
+            input.placeholder = 'Type to jump, or select action...';
             input.focus();
-            filterWorkstreams('');
+            paletteMode = 'actions';
+            paletteSelectedIndex = 0;
+            renderPaletteResults();
         }
 
         function closePalette() {
             document.getElementById('palette').classList.remove('visible');
         }
 
-        function filterWorkstreams(query) {
-            const q = query.toLowerCase();
-            filteredWorkstreams = workstreams.filter(ws => ws.name.toLowerCase().includes(q));
-            paletteSelectedIndex = 0;
-            renderPaletteResults();
-        }
-
         function renderPaletteResults() {
             const container = document.getElementById('palette-results');
-            if (filteredWorkstreams.length === 0) {
-                container.innerHTML = '<div class="palette-empty">No matching workstreams</div>';
-                return;
-            }
-            container.innerHTML = filteredWorkstreams.map((ws, i) => `
-                <div class="palette-item${i === paletteSelectedIndex ? ' selected' : ''}" data-name="${ws.name}">
-                    <span>${ws.name}${ws.needsHelp ? ' <span class="badge badge-help">!</span>' : ''}</span>
-                    <span class="badge badge-${ws.state}">${ws.state}</span>
-                </div>
-            `).join('');
-            container.querySelectorAll('.palette-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    window.location.href = '/workstream/' + item.dataset.name;
+            const input = document.getElementById('palette-input');
+            const query = input.value.toLowerCase();
+
+            if (paletteMode === 'actions' && query === '') {
+                // Show actions menu
+                container.innerHTML = paletteActions.map((action, i) => `
+                    <div class="palette-action${i === paletteSelectedIndex ? ' selected' : ''}" data-action="${action.id}">
+                        <span class="palette-action-icon">${action.icon}</span>
+                        <span class="palette-action-text">${action.label}</span>
+                        <span class="palette-action-hint">${action.hint}</span>
+                    </div>
+                `).join('');
+                container.querySelectorAll('.palette-action').forEach(item => {
+                    item.addEventListener('click', () => executeAction(item.dataset.action));
                 });
-            });
+            } else {
+                // Jump mode - filter workstreams
+                paletteMode = 'jump';
+                filteredWorkstreams = workstreams.filter(ws => ws.name.toLowerCase().includes(query));
+                if (filteredWorkstreams.length === 0) {
+                    container.innerHTML = '<div class="palette-empty">No matching workstreams</div>';
+                    return;
+                }
+                container.innerHTML = filteredWorkstreams.map((ws, i) => `
+                    <div class="palette-item${i === paletteSelectedIndex ? ' selected' : ''}" data-name="${ws.name}">
+                        <span>${ws.name}${ws.needsHelp ? ' <span class="badge badge-help">!</span>' : ''}</span>
+                        <span class="badge badge-${ws.state}">${ws.state}</span>
+                    </div>
+                `).join('');
+                container.querySelectorAll('.palette-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        window.location.href = '/workstream/' + item.dataset.name;
+                    });
+                });
+            }
+        }
+
+        function executeAction(actionId) {
+            if (actionId === 'search') {
+                window.location.href = '/search';
+            } else if (actionId === 'jump') {
+                paletteMode = 'jump';
+                paletteSelectedIndex = 0;
+                const input = document.getElementById('palette-input');
+                input.placeholder = 'Jump to workstream...';
+                input.focus();
+                renderPaletteResults();
+            }
         }
 
         function selectPaletteItem(index) {
-            if (filteredWorkstreams.length === 0) return;
-            paletteSelectedIndex = Math.max(0, Math.min(index, filteredWorkstreams.length - 1));
+            const max = paletteMode === 'actions' && document.getElementById('palette-input').value === ''
+                ? paletteActions.length - 1
+                : filteredWorkstreams.length - 1;
+            paletteSelectedIndex = Math.max(0, Math.min(index, max));
             renderPaletteResults();
-            // Scroll selected item into view
-            const selected = document.querySelector('.palette-item.selected');
+            const selected = document.querySelector('.palette-action.selected, .palette-item.selected');
             if (selected) selected.scrollIntoView({ block: 'nearest' });
         }
 
         function openPaletteSelected() {
-            if (filteredWorkstreams.length === 0) return;
-            const ws = filteredWorkstreams[paletteSelectedIndex];
-            if (ws) window.location.href = '/workstream/' + ws.name;
+            const input = document.getElementById('palette-input');
+            if (paletteMode === 'actions' && input.value === '') {
+                const action = paletteActions[paletteSelectedIndex];
+                if (action) executeAction(action.id);
+            } else if (filteredWorkstreams.length > 0) {
+                const ws = filteredWorkstreams[paletteSelectedIndex];
+                if (ws) window.location.href = '/workstream/' + ws.name;
+            }
         }
 
         document.getElementById('palette-input').addEventListener('input', (e) => {
-            filterWorkstreams(e.target.value);
+            if (e.target.value === '') {
+                paletteMode = 'actions';
+                paletteSelectedIndex = 0;
+            } else {
+                paletteMode = 'jump';
+            }
+            renderPaletteResults();
         });
 
         document.getElementById('palette-input').addEventListener('keydown', (e) => {
             switch (e.key) {
-                case 'ArrowDown': case '.':
+                case 'ArrowDown':
                     selectPaletteItem(paletteSelectedIndex + 1);
                     e.preventDefault();
                     break;
-                case 'ArrowUp': case ',':
+                case 'ArrowUp':
                     selectPaletteItem(paletteSelectedIndex - 1);
                     e.preventDefault();
                     break;
@@ -489,6 +594,42 @@
                 case '/': openPalette(); e.preventDefault(); break;
             }
         });
+
+        async function loadMore() {
+            const btn = document.querySelector('.load-more-btn');
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch(`/api/activity?offset=${currentOffset}&limit=20`);
+                const data = await response.json();
+                if (data.entries && data.entries.length > 0) {
+                    const loadMoreDiv = document.getElementById('load-more');
+                    data.entries.forEach(entry => {
+                        const article = document.createElement('article');
+                        article.className = 'feed-item';
+                        article.dataset.workstream = entry.workstreamName;
+                        article.dataset.timestamp = entry.timestamp;
+                        article.innerHTML = `
+                            <div class="feed-name">
+                                ${entry.workstreamName}
+                                ${entry.needsHelp ? '<span class="badge badge-help">!</span>' : ''}
+                                ${entry.blockedBy ? `<span class="badge badge-blocked">blocked</span><span class="blocked-by">← ${entry.blockedBy}</span>` : ''}
+                            </div>
+                            <div class="feed-time">${entry.relativeTime}</div>
+                            <div class="feed-content">${entry.content}</div>
+                        `;
+                        article.addEventListener('click', () => {
+                            window.location.href = '/workstream/' + entry.workstreamName + '#log-' + entry.timestamp;
+                        });
+                        loadMoreDiv.parentNode.insertBefore(article, loadMoreDiv);
+                    });
+                    currentOffset += data.entries.length;
+                    if (!data.hasMore && loadMoreDiv) loadMoreDiv.remove();
+                }
+            } catch (e) {
+                console.error('Load more failed:', e);
+            }
+            if (btn) btn.disabled = false;
+        }
 
         async function refresh() {
             try {

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - {{.Project}}</title>
+    <style>
+        :root {
+            --text-primary: #1a1a1a;
+            --text-secondary: #4a4a4a;
+            --text-muted: #666;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --bg-hover: #eee;
+            --border: #ddd;
+            --focus: #0055cc;
+            --red: #c00;
+            --amber: #b45309;
+            --green: #166534;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .header-breadcrumb {
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+        .header-breadcrumb:hover { text-decoration: underline; }
+
+        .header-title {
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        /* Search bar */
+        .search-bar {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: var(--focus);
+            box-shadow: 0 0 0 3px rgba(0, 85, 204, 0.1);
+        }
+
+        .search-hint {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .search-hint code {
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        /* Results */
+        .results {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            display: grid;
+            grid-template-columns: 70px minmax(100px, 150px) 1fr;
+            gap: 12px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        .result-item:hover { background: var(--bg-hover); }
+
+        .result-item.selected {
+            background: var(--focus);
+            color: white;
+        }
+        .result-item.selected .result-time,
+        .result-item.selected .result-ws { color: rgba(255,255,255,0.9); }
+        .result-item.selected .badge {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        .badge-log { background: var(--bg-secondary); color: var(--text-muted); }
+        .badge-task { background: #e0e7ff; color: #4338ca; }
+        .badge-pending { background: var(--bg-secondary); color: var(--text-muted); }
+        .badge-in_progress { background: #dbeafe; color: var(--focus); }
+        .badge-done { background: #dcfce7; color: var(--green); }
+        .badge-skipped { background: var(--bg-secondary); color: var(--text-muted); }
+
+        .result-ws {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .result-time {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .result-content {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            padding: 48px 16px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .loading {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Status bar */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .status-shortcuts {
+            display: flex;
+            gap: 16px;
+        }
+
+        kbd {
+            display: inline-block;
+            padding: 2px 5px;
+            font-family: inherit;
+            font-size: 11px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+        }
+
+        .result-count { }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="header-breadcrumb">{{.Project}}</a>
+        <span style="color: var(--text-muted)">/</span>
+        <h1 class="header-title">Search</h1>
+    </header>
+
+    <div class="search-bar">
+        <input type="text" class="search-input" id="search-input" placeholder="Search logs and tasks..." autocomplete="off" autofocus>
+        <div class="search-hint">
+            Tip: Use <code>ws:name</code> to filter by workstream
+        </div>
+    </div>
+
+    <main class="results" id="results">
+        <div class="empty-state">Type to search across all logs and tasks</div>
+    </main>
+
+    <footer class="status-bar">
+        <div class="status-shortcuts">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>Enter</kbd> open</span>
+            <span><kbd>Esc</kbd> back</span>
+        </div>
+        <div class="result-count" id="result-count"></div>
+    </footer>
+
+    <script>
+        let selectedIndex = 0;
+        let results = [];
+        let searchTimeout = null;
+
+        const input = document.getElementById('search-input');
+        const resultsContainer = document.getElementById('results');
+        const resultCount = document.getElementById('result-count');
+
+        function parseQuery(raw) {
+            let wsFilter = '';
+            let query = raw;
+
+            // Extract ws:name filter
+            const wsMatch = raw.match(/ws:(\S+)/);
+            if (wsMatch) {
+                wsFilter = wsMatch[1];
+                query = raw.replace(/ws:\S+/, '').trim();
+            }
+
+            return { query, wsFilter };
+        }
+
+        async function search(raw) {
+            if (!raw.trim()) {
+                results = [];
+                renderResults();
+                return;
+            }
+
+            const { query, wsFilter } = parseQuery(raw);
+
+            resultsContainer.innerHTML = '<div class="loading">Searching...</div>';
+
+            try {
+                const params = new URLSearchParams({ q: query });
+                if (wsFilter) params.set('ws', wsFilter);
+
+                const response = await fetch('/api/search?' + params);
+                results = await response.json();
+                selectedIndex = 0;
+                renderResults();
+            } catch (e) {
+                console.error('Search failed:', e);
+                resultsContainer.innerHTML = '<div class="empty-state">Search failed</div>';
+            }
+        }
+
+        function renderResults() {
+            if (results.length === 0) {
+                if (input.value.trim()) {
+                    resultsContainer.innerHTML = '<div class="empty-state">No results found</div>';
+                } else {
+                    resultsContainer.innerHTML = '<div class="empty-state">Type to search across all logs and tasks</div>';
+                }
+                resultCount.textContent = '';
+                return;
+            }
+
+            resultCount.textContent = `${results.length} result${results.length === 1 ? '' : 's'}`;
+
+            resultsContainer.innerHTML = results.map((r, i) => `
+                <article class="result-item${i === selectedIndex ? ' selected' : ''}" data-index="${i}">
+                    <div>
+                        <span class="badge badge-${r.type}">${r.type}</span>
+                        ${r.type === 'task' ? `<span class="badge badge-${r.taskStatus}">${r.taskStatus}</span>` : ''}
+                    </div>
+                    <div class="result-ws">${r.workstreamName}</div>
+                    <div>
+                        <div class="result-content">${escapeHtml(r.content)}</div>
+                        ${r.relativeTime ? `<div class="result-time">${r.relativeTime}</div>` : ''}
+                    </div>
+                </article>
+            `).join('');
+
+            resultsContainer.querySelectorAll('.result-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    openResult(parseInt(item.dataset.index));
+                });
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function selectResult(index) {
+            if (results.length === 0) return;
+            selectedIndex = Math.max(0, Math.min(index, results.length - 1));
+            renderResults();
+            const selected = document.querySelector('.result-item.selected');
+            if (selected) selected.scrollIntoView({ block: 'nearest' });
+        }
+
+        function openResult(index) {
+            const r = results[index];
+            if (!r) return;
+
+            if (r.type === 'log') {
+                window.location.href = '/workstream/' + r.workstreamName + '#log-' + Math.floor(new Date(r.timestamp).getTime() / 1000);
+            } else {
+                window.location.href = '/workstream/' + r.workstreamName;
+            }
+        }
+
+        input.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => search(e.target.value), 200);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowDown':
+                    selectResult(selectedIndex + 1);
+                    e.preventDefault();
+                    break;
+                case 'ArrowUp':
+                    selectResult(selectedIndex - 1);
+                    e.preventDefault();
+                    break;
+                case 'Enter':
+                    if (results.length > 0) {
+                        openResult(selectedIndex);
+                        e.preventDefault();
+                    }
+                    break;
+                case 'Escape':
+                    window.location.href = '/';
+                    e.preventDefault();
+                    break;
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target === input) return;
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    selectResult(selectedIndex + 1);
+                    e.preventDefault();
+                    break;
+                case 'ArrowUp':
+                    selectResult(selectedIndex - 1);
+                    e.preventDefault();
+                    break;
+                case 'Enter':
+                    if (results.length > 0) {
+                        openResult(selectedIndex);
+                        e.preventDefault();
+                    }
+                    break;
+                case 'Escape':
+                    window.location.href = '/';
+                    e.preventDefault();
+                    break;
+                case '/':
+                    input.focus();
+                    e.preventDefault();
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>

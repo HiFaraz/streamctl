@@ -622,7 +622,7 @@ func (s *Store) Delete(project, name string) error {
 }
 
 // RecentActivity returns recent log entries across all workstreams for a project
-func (s *Store) RecentActivity(project string, limit int) ([]workstream.ActivityEntry, error) {
+func (s *Store) RecentActivity(project string, limit, offset int) ([]workstream.ActivityEntry, error) {
 	rows, err := s.db.Query(`
 		SELECT w.name, w.project, l.timestamp, l.content, w.needs_help,
 			(SELECT b.project || '/' || b.name
@@ -634,8 +634,8 @@ func (s *Store) RecentActivity(project string, limit int) ([]workstream.Activity
 		JOIN workstreams w ON l.workstream_id = w.id
 		WHERE w.project = ?
 		ORDER BY l.timestamp DESC
-		LIMIT ?`,
-		project, limit,
+		LIMIT ? OFFSET ?`,
+		project, limit, offset,
 	)
 	if err != nil {
 		return nil, err
@@ -671,4 +671,86 @@ func relativeTime(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+// SearchResult represents a search result (log entry or task)
+type SearchResult struct {
+	Type           string    `json:"type"` // "log" or "task"
+	WorkstreamName string    `json:"workstreamName"`
+	Content        string    `json:"content"`
+	Timestamp      time.Time `json:"timestamp,omitempty"`
+	TaskPosition   int       `json:"taskPosition,omitempty"`
+	TaskStatus     string    `json:"taskStatus,omitempty"`
+	RelativeTime   string    `json:"relativeTime,omitempty"`
+}
+
+// Search searches logs and tasks for a query string
+func (s *Store) Search(project, query, wsFilter string) ([]SearchResult, error) {
+	if query == "" {
+		return []SearchResult{}, nil
+	}
+
+	var results []SearchResult
+	likeQuery := "%" + query + "%"
+
+	// Search log entries
+	logQuery := `
+		SELECT w.name, l.timestamp, l.content
+		FROM log_entries l
+		JOIN workstreams w ON l.workstream_id = w.id
+		WHERE w.project = ? AND l.content LIKE ?`
+	logArgs := []any{project, likeQuery}
+
+	if wsFilter != "" {
+		logQuery += " AND w.name = ?"
+		logArgs = append(logArgs, wsFilter)
+	}
+	logQuery += " ORDER BY l.timestamp DESC LIMIT 50"
+
+	rows, err := s.db.Query(logQuery, logArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r SearchResult
+		if err := rows.Scan(&r.WorkstreamName, &r.Timestamp, &r.Content); err != nil {
+			return nil, err
+		}
+		r.Type = "log"
+		r.RelativeTime = relativeTime(r.Timestamp)
+		results = append(results, r)
+	}
+
+	// Search tasks
+	taskQuery := `
+		SELECT w.name, p.position, p.text, p.status
+		FROM plan_items p
+		JOIN workstreams w ON p.workstream_id = w.id
+		WHERE w.project = ? AND (p.text LIKE ? OR p.notes LIKE ?)`
+	taskArgs := []any{project, likeQuery, likeQuery}
+
+	if wsFilter != "" {
+		taskQuery += " AND w.name = ?"
+		taskArgs = append(taskArgs, wsFilter)
+	}
+	taskQuery += " ORDER BY w.name, p.position LIMIT 50"
+
+	taskRows, err := s.db.Query(taskQuery, taskArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer taskRows.Close()
+
+	for taskRows.Next() {
+		var r SearchResult
+		if err := taskRows.Scan(&r.WorkstreamName, &r.TaskPosition, &r.Content, &r.TaskStatus); err != nil {
+			return nil, err
+		}
+		r.Type = "task"
+		results = append(results, r)
+	}
+
+	return results, nil
 }
