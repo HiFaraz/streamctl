@@ -1,163 +1,195 @@
 # streamctl
 
-Persistent workstream tracking for Claude Code agents.
+**Persistent memory for AI coding agents.**
 
-## The Problem
+When you're using Claude Code, Cursor, or other AI assistants for complex multi-session work, context disappears between sessions. What were you working on? What decisions did you make? Where did you leave off?
 
-When running Claude Code agents across multiple sessions - whether solo or in teams - context is lost:
-- What was I working on yesterday?
-- What decisions did I make and why?
-- Which pieces are blocked and on what?
-- Where did the last session leave off?
+streamctl solves this with **workstreams** - persistent units of work that survive across sessions, track progress, and preserve decisions.
 
-Agent teams solve in-session coordination beautifully (task lists, mailbox, claiming). But when the session ends, everything disappears.
+## Why?
 
-## The Solution
+AI coding assistants are great for single-session tasks. But real projects span days or weeks:
 
-streamctl provides a persistent database of **workstreams** - units of work that survive across sessions. It's long-term memory for your agent work.
+- **Monday**: "Implement authentication" - you make progress, discuss trade-offs, decide on JWT
+- **Tuesday**: New session. The AI has no memory. You re-explain everything. Again.
+- **Wednesday**: Different approach emerges. Why did you reject it on Monday? Nobody knows.
 
-```
-workstream_create(project="myapp", name="auth", objective="Implement JWT authentication")
-workstream_update(project="myapp", name="auth", log_entry="Completed token validation. Next: middleware.")
-workstream_update(project="myapp", name="auth", state="done")
-```
-
-Next week, a new session can read exactly where things stand:
+With streamctl:
 
 ```
-workstream_list(project="myapp")
-workstream_get(project="myapp", name="auth")  # Full history, decisions, context
+# Monday
+workstream_create(project="myapp", name="auth", objective="JWT authentication")
+workstream_update(name="auth", log_entry="Chose JWT over sessions - need stateless for Lambda")
+workstream_update(name="auth", task_add="Token validation middleware")
+workstream_update(name="auth", task_status={"position": 0, "status": "done"})
+
+# Tuesday - new session picks up instantly
+workstream_get(project="myapp", name="auth")
+→ Shows objective, tasks, decisions, exactly where you left off
 ```
+
+## Features
+
+- **Task tracking** with status (pending/in_progress/done/skipped) and markdown notes
+- **Decision log** - record why you chose X over Y, never re-litigate
+- **Dependencies** - mark workstreams as blocked by others
+- **needs_help flag** - signal when you're stuck and need human attention
+- **Live web dashboard** - monitor parallel agents in real-time
+- **Keyboard-native UI** - navigate with `.`/`,`, `/` to search, `?` for help
+- **Export to markdown** - sync to git via pre-commit hooks
+- **Works with any MCP client** - Claude Code, Claude Desktop, etc.
 
 ## Quick Start
 
-Paste this into Claude Code:
+In Claude Code:
 
 ```
-Clone https://github.com/HiFaraz/streamctl to ~/streamctl if not present, build it, then:
-
-1. Run `claude mcp add streamctl --scope user -- ~/streamctl/streamctl serve` to add the MCP server
-2. Add to ~/.claude/CLAUDE.md (create if needed) instructions to use workstreams:
-   - At session start: check workstream_list, read context with workstream_get for in_progress work
-   - During work: create workstreams for non-trivial features, log progress and decisions
-   - At session end: update state and log what's next
-   - Append feedback to ~/streamctl/FEEDBACK.md (create if needed) when you notice friction, have suggestions, or something works well. Format: `### DATE`, `**Type:** friction|suggestion|working-well`, `**Context:**`, `**Feedback:**`, `**Status:**`
-3. Initialize .streamctl/ in the current project and add to .gitignore
-4. Check for existing workstreams and resume any in_progress work
+Clone https://github.com/HiFaraz/streamctl to ~/streamctl, build with `go build -o streamctl ./cmd/streamctl`, then run `claude mcp add streamctl --scope user -- ~/streamctl/streamctl serve`
 ```
 
----
+Then tell Claude to use workstreams in your `~/.claude/CLAUDE.md`:
 
-## Examples
+```markdown
+## Workstream Management
 
-### Parallel Feature Development
-
-Break a feature into independent workstreams:
-
-```
-workstream_create(project="myapp", name="db-schema", objective="Add user preferences table")
-workstream_create(project="myapp", name="api", objective="CRUD endpoints for preferences")
-workstream_create(project="myapp", name="frontend", objective="Preferences settings page")
+At session start, check `workstream_list(project="<repo>")` and resume any in_progress work.
+During work, log decisions and progress. At session end, update state and note what's next.
 ```
 
-Multiple agents (or team sessions) each claim one, work on it, and log progress. No conflicts.
+## Web Dashboard
 
-### Resuming Work
-
-Yesterday's session ended mid-feature:
+Monitor workstreams in your browser:
 
 ```
-workstream_list(project="myapp", state="in_progress")
-→ Shows auth workstream with log: "JWT validation done. Next: middleware integration."
+web_serve(project="myproject")
+→ http://localhost:54321
 ```
 
-Pick up exactly where you left off.
+Live-updating feed of activity across all workstreams. Keyboard-native navigation. Ideal for watching parallel agents work.
 
-### Tracking Blockers
+**Keyboard shortcuts**: `.`/`,` navigate, `Enter` opens, `/` searches, `Backspace` goes back, `?` shows help.
+
+## Use Cases
+
+### Solo Development
+
+Track complex features across sessions:
 
 ```
-workstream_update(project="myapp", name="api", state="blocked",
-  log_entry="Waiting for auth workstream to finish token format")
+workstream_create(project="myapp", name="refactor-db", objective="Migrate from MySQL to Postgres")
+workstream_update(name="refactor-db", log_entry="Schema converted. Testing migration script tomorrow.")
 ```
 
-Tomorrow's session sees this is blocked and why.
+Next session reads the log and continues.
 
----
+### Parallel Agents
 
-## Using with Agent Teams
+Run multiple Claude Code instances on different workstreams:
 
-If you're using [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams), streamctl adds the persistence layer on top.
-
-**The mental model:**
-- **Workstreams** = epics that span multiple sessions (persistent)
-- **Team tasks** = granular work within a session (ephemeral)
-- **Mailbox** = real-time chatter during a session (ephemeral)
-- **streamctl logs** = decisions and milestones (persistent)
-
-| Ephemeral (agent teams) | Persistent (streamctl) |
-|-------------------------|------------------------|
-| Task list | Workstreams |
-| Mailbox messages | Log entries |
-| Team context | Objective, key context, decisions |
-
-### Pattern for Team Leads
-
-**Starting a session:**
 ```
-1. workstream_list(project="myapp")           # What needs work?
-2. workstream_get(project, name) for each     # Read previous context
-3. Create team, passing workstream context to teammates
+# Agent 1                          # Agent 2
+workstream_claim("api")            workstream_claim("frontend")
+# works on API...                  # works on frontend...
+workstream_update(log_entry="...")  workstream_update(log_entry="...")
 ```
 
-**During the session:**
-- Teammates use mailbox for quick coordination ("are you done with X?")
-- Lead logs major milestones to streamctl (decisions, blockers, completions)
-- Don't log every small step - workstreams are higher-level than tasks
+Watch both in the web dashboard. Flag `needs_help=true` when stuck.
 
-**Ending a session:**
+### Team Coordination
+
+Break work into independent streams, track dependencies:
+
 ```
-workstream_update(project="myapp", name="auth",
-  state="in_progress",
-  log_entry="JWT done. Middleware 50%. Decision: using httpOnly cookies. Next: finish middleware, then integrate with api workstream.")
+workstream_create(name="auth", objective="Authentication system")
+workstream_create(name="api", objective="REST endpoints")
+workstream_update(name="api", add_blocker="myapp/auth")  # api waits for auth
 ```
 
-**Key principles:**
-- Lead owns streamctl updates (teammates focus on work)
-- Log decisions with rationale ("chose X because Y")
-- Write for your future self - assume no memory
-- Update states honestly - blocked means blocked
+Dashboard shows what's blocked and why.
 
----
-
-## Reference
-
-### MCP Tools
-
-| Tool | Parameters | Description |
-|------|------------|-------------|
-| `workstream_list` | `project?`, `state?`, `owner?` | List workstreams |
-| `workstream_get` | `project`, `name` | Get full details |
-| `workstream_create` | `project`, `name`, `objective` | Create workstream |
-| `workstream_update` | `project`, `name`, `state?`, `log_entry?`, `plan_index?` | Update |
-| `workstream_claim` | `project`, `name`, `owner` | Set owner |
-| `workstream_release` | `project`, `name` | Clear owner |
-
-### Workstream Fields
-
-| Field | Description |
-|-------|-------------|
-| `project` | Repository or project name |
-| `name` | Identifier (e.g., "auth-refactor") |
-| `state` | `pending` → `in_progress` → `done` / `blocked` |
-| `owner` | Who's working on it |
-| `objective` | One-sentence goal |
-| `plan` | Checklist (toggle items with `plan_index`) |
-| `log` | Timestamped progress entries |
-
-### CLI
+## CLI Commands
 
 ```bash
-streamctl tui      # Visual dashboard
-streamctl list     # JSON dump
-streamctl help     # Help
+streamctl serve              # Start MCP server (for Claude Code)
+streamctl web                # Open web dashboard
+streamctl tui                # Terminal UI
+streamctl export PROJECT     # Export to markdown (for git)
+streamctl list               # JSON dump
 ```
+
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `workstream_list` | List workstreams, filter by project/state/owner |
+| `workstream_get` | Full workstream details as markdown |
+| `workstream_create` | Create new workstream |
+| `workstream_update` | Update state, log, tasks, dependencies, needs_help |
+| `workstream_claim` | Set ownership |
+| `workstream_release` | Clear ownership |
+| `web_serve` | Start web dashboard, returns URL |
+
+### workstream_update Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `state` | pending, in_progress, blocked, done |
+| `log_entry` | Append timestamped note (supports markdown) |
+| `task_add` | Add task |
+| `task_status` | `{"position": 0, "status": "done"}` |
+| `task_notes` | `{"position": 0, "notes": "markdown here"}` |
+| `add_blocker` | `"project/name"` - mark as blocked by |
+| `needs_help` | `true` - flag for human attention |
+
+## Export to Git
+
+Keep workstreams in version control:
+
+```bash
+streamctl export myproject --dir ./workstreams/
+```
+
+Add to pre-commit hook:
+
+```bash
+#!/bin/bash
+streamctl export myproject --dir ./workstreams/
+git add workstreams/*.md
+```
+
+Exported files are marked as generated - edit via streamctl, not directly.
+
+## Installation
+
+Requires Go 1.21+:
+
+```bash
+git clone https://github.com/HiFaraz/streamctl ~/streamctl
+cd ~/streamctl
+go build -o streamctl ./cmd/streamctl
+./streamctl init
+```
+
+Add to Claude Code:
+
+```bash
+claude mcp add streamctl --scope user -- ~/streamctl/streamctl serve
+```
+
+## How It Works
+
+streamctl is an [MCP server](https://modelcontextprotocol.io/) that exposes workstream tools to AI assistants. Data is stored in SQLite at `~/.streamctl/workstreams.db`.
+
+The mental model:
+- **Workstream** = a unit of work spanning multiple sessions (like an epic)
+- **Tasks** = checklist items within a workstream
+- **Log** = timestamped decisions and progress notes
+- **State** = pending → in_progress → done (or blocked)
+
+## Contributing
+
+Feedback welcome. Open an issue or append to `~/streamctl/FEEDBACK.md` while using it.
+
+## License
+
+MIT
