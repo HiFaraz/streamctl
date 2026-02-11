@@ -36,7 +36,7 @@ Paste this into Claude Code:
 ```
 Clone https://github.com/HiFaraz/streamctl to ~/streamctl if not present, build it, then:
 
-1. Add streamctl MCP server to ~/.claude/settings.json if not already configured
+1. Run `claude mcp add streamctl --scope user -- ~/streamctl/streamctl serve` to add the MCP server
 2. Add to ~/.claude/CLAUDE.md (create if needed) instructions to use workstreams:
    - At session start: check workstream_list, read context with workstream_get for in_progress work
    - During work: create workstreams for non-trivial features, log progress and decisions
