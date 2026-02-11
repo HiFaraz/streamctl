@@ -74,4 +74,7 @@ type ActivityEntry struct {
 	WorkstreamProject string
 	Timestamp         time.Time
 	Content           string
+	NeedsHelp         bool   // Workstream needs help flag
+	BlockedBy         string // First blocker name if blocked
+	RelativeTime      string // Human-readable relative time
 }

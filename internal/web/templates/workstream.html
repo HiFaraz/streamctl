@@ -5,265 +5,139 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Workstream.Name}} - {{.Project}}</title>
     <style>
-        /* WCAG 2.2 AAA Compliant Styles */
         :root {
             --text-primary: #1a1a1a;
             --text-secondary: #4a4a4a;
-            --text-muted: #595959;
+            --text-muted: #666;
             --bg-primary: #ffffff;
-            --bg-secondary: #f8f8f8;
-            --bg-tertiary: #f0f0f0;
-            --border: #d0d0d0;
+            --bg-secondary: #f5f5f5;
+            --bg-hover: #eee;
+            --border: #ddd;
             --focus: #0055cc;
-            --focus-outline: #0055cc;
-            --link: #0055cc;
-            --link-hover: #003d99;
-            --status-alert: #b91c1c;
-            --status-alert-bg: #fef2f2;
-            --status-warning: #92400e;
-            --status-warning-bg: #fffbeb;
-            --status-success: #166534;
-            --status-success-bg: #f0fdf4;
-            --status-neutral: #4a4a4a;
-            --status-neutral-bg: #f5f5f5;
+            --red: #c00;
+            --amber: #b45309;
+            --green: #166534;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 1rem;
+            font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 14px;
             line-height: 1.6;
             color: var(--text-primary);
+            background: var(--bg-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
             background: var(--bg-secondary);
         }
 
-        .skip-link {
-            position: absolute;
-            top: -100px;
-            left: 0;
-            padding: 1rem;
-            background: var(--focus);
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            z-index: 1000;
-        }
-        .skip-link:focus { top: 0; }
-
-        :focus {
-            outline: 3px solid var(--focus-outline);
-            outline-offset: 2px;
-        }
-        :focus:not(:focus-visible) { outline: none; }
-        :focus-visible {
-            outline: 3px solid var(--focus-outline);
-            outline-offset: 2px;
-        }
-
-        .layout { display: flex; min-height: 100vh; }
-
-        /* Sidebar */
-        .sidebar {
-            width: 300px;
-            background: var(--bg-primary);
-            border-right: 1px solid var(--border);
+        .header-title {
             display: flex;
-            flex-direction: column;
-            position: fixed;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
+            align-items: center;
+            gap: 12px;
         }
 
-        .sidebar-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .sidebar-header h1 {
-            font-size: 1.25rem;
+        .header-title h1 {
+            font-size: 16px;
             font-weight: 700;
         }
 
-        .sidebar-header a {
-            color: var(--text-primary);
+        .header-breadcrumb {
+            color: var(--text-muted);
             text-decoration: none;
         }
-        .sidebar-header a:hover { text-decoration: underline; }
-
-        .sidebar-nav { padding: 1rem; flex: 1; }
-
-        .nav-heading {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 0.5rem 0.75rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .nav-list { list-style: none; }
-        .nav-item { margin-bottom: 0.25rem; }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem;
-            border-radius: 6px;
-            text-decoration: none;
-            color: var(--text-primary);
-            font-weight: 500;
-        }
-        .nav-link:hover { background: var(--bg-tertiary); }
-        .nav-link[aria-current="page"] {
-            background: var(--bg-tertiary);
-            font-weight: 600;
-        }
-
-        .nav-link-name {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+        .header-breadcrumb:hover { text-decoration: underline; }
 
         .badge {
             display: inline-block;
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
+            padding: 2px 8px;
+            font-size: 11px;
             font-weight: 600;
-            border-radius: 4px;
+            border-radius: 3px;
             text-transform: uppercase;
         }
-        .badge-pending { background: var(--status-neutral-bg); color: var(--status-neutral); }
-        .badge-in_progress { background: var(--status-warning-bg); color: var(--status-warning); }
-        .badge-blocked { background: var(--status-alert-bg); color: var(--status-alert); }
-        .badge-done { background: var(--status-success-bg); color: var(--status-success); }
-
-        .help-flag {
-            color: var(--status-alert);
-            font-weight: 700;
-            font-size: 1rem;
-        }
+        .badge-pending { background: var(--bg-secondary); color: var(--text-muted); }
+        .badge-in_progress { background: #dbeafe; color: var(--focus); }
+        .badge-blocked { background: #fef3c7; color: var(--amber); }
+        .badge-done { background: #dcfce7; color: var(--green); }
+        .badge-help { background: #fee; color: var(--red); }
 
         /* Main content */
         .main {
             flex: 1;
-            margin-left: 300px;
-            padding: 2rem;
-            max-width: 900px;
-        }
-
-        /* Page header */
-        .page-header {
-            margin-bottom: 2rem;
-            padding-bottom: 1.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .page-header h2 {
-            font-size: 1.75rem;
-            font-weight: 700;
-            margin-bottom: 0.75rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-        }
-
-        .page-meta {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-            color: var(--text-secondary);
-            font-size: 0.95rem;
+            overflow-y: auto;
+            padding: 16px;
+            max-width: 800px;
         }
 
         /* Sections */
         .section {
-            background: var(--bg-primary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            overflow: hidden;
-        }
-
-        .section-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-secondary);
+            margin-bottom: 24px;
         }
 
         .section-title {
-            font-size: 1rem;
+            font-size: 12px;
             font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
         }
 
         .section-content {
-            padding: 1.5rem;
-        }
-
-        .section-content p {
             color: var(--text-secondary);
-            line-height: 1.7;
         }
 
-        /* Task list */
-        .task-list { list-style: none; }
-
-        .task-item {
+        /* Tasks */
+        .task {
             display: flex;
             align-items: flex-start;
-            gap: 1rem;
-            padding: 1rem 0;
+            gap: 8px;
+            padding: 8px 0;
             border-bottom: 1px solid var(--border);
         }
-        .task-item:last-child { border-bottom: none; }
-        .task-item:first-child { padding-top: 0; }
+        .task:last-child { border-bottom: none; }
 
-        .task-checkbox {
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
+        .task-check {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-radius: 3px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.875rem;
-            font-weight: 700;
+            font-size: 12px;
             flex-shrink: 0;
             margin-top: 2px;
         }
-
-        .task-pending .task-checkbox {
-            border: 2px solid var(--border);
-            color: transparent;
+        .task-done .task-check {
+            background: var(--green);
+            border-color: var(--green);
+            color: white;
         }
-        .task-in_progress .task-checkbox {
-            background: var(--status-warning-bg);
-            border: 2px solid var(--status-warning);
-            color: var(--status-warning);
+        .task-in_progress .task-check {
+            border-color: var(--focus);
+            color: var(--focus);
         }
-        .task-done .task-checkbox {
-            background: var(--status-success-bg);
-            border: 2px solid var(--status-success);
-            color: var(--status-success);
-        }
-        .task-skipped .task-checkbox {
-            background: var(--status-neutral-bg);
-            border: 2px solid var(--status-neutral);
-            color: var(--status-neutral);
+        .task-skipped .task-check {
+            background: var(--bg-secondary);
+            border-color: var(--border);
+            color: var(--text-muted);
         }
 
         .task-body { flex: 1; }
-
-        .task-text {
-            color: var(--text-primary);
-            font-weight: 500;
-            line-height: 1.5;
-        }
+        .task-text { }
         .task-done .task-text,
         .task-skipped .task-text {
             color: var(--text-muted);
@@ -271,34 +145,28 @@
         }
 
         .task-notes {
-            margin-top: 0.75rem;
-            padding: 1rem;
+            margin-top: 8px;
+            padding: 8px 12px;
             background: var(--bg-secondary);
-            border-radius: 6px;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
+            border-radius: 4px;
+            font-size: 13px;
             white-space: pre-wrap;
-            font-family: ui-monospace, "SF Mono", Monaco, monospace;
         }
 
-        /* Log entries */
-        .log-item {
-            padding: 1rem 0;
+        /* Log */
+        .log-entry {
+            padding: 8px 0;
             border-bottom: 1px solid var(--border);
         }
-        .log-item:last-child { border-bottom: none; }
-        .log-item:first-child { padding-top: 0; }
+        .log-entry:last-child { border-bottom: none; }
 
         .log-time {
-            font-size: 0.875rem;
+            font-size: 12px;
             color: var(--text-muted);
-            margin-bottom: 0.5rem;
-            font-family: ui-monospace, "SF Mono", Monaco, monospace;
         }
 
         .log-content {
-            color: var(--text-secondary);
-            line-height: 1.6;
+            margin-top: 4px;
             white-space: pre-wrap;
         }
 
@@ -306,62 +174,41 @@
         .dep-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
-            list-style: none;
+            gap: 8px;
         }
 
         .dep-item {
-            background: var(--bg-tertiary);
-            padding: 0.5rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-        }
-
-        .dep-item a {
-            color: var(--link);
-            text-decoration: underline;
-        }
-
-        /* Empty state */
-        .empty {
-            color: var(--text-muted);
-            font-style: italic;
+            padding: 4px 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            font-size: 13px;
         }
 
         /* Status bar */
         .status-bar {
-            position: fixed;
-            bottom: 0;
-            left: 300px;
-            right: 0;
-            background: var(--text-primary);
-            color: white;
-            padding: 0.75rem 1.5rem;
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            font-size: 0.875rem;
-            z-index: 100;
+            align-items: center;
+            padding: 8px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            font-size: 12px;
+            color: var(--text-muted);
         }
-        .status-bar kbd {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            font-family: inherit;
-            font-size: 0.875rem;
-            font-weight: 600;
-            background: rgba(255,255,255,0.2);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 4px;
-            color: white;
-        }
+
         .status-shortcuts {
             display: flex;
-            gap: 1.5rem;
+            gap: 16px;
         }
-        .status-shortcut {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+
+        kbd {
+            display: inline-block;
+            padding: 2px 5px;
+            font-family: inherit;
+            font-size: 11px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 3px;
         }
 
         /* Command palette */
@@ -373,48 +220,40 @@
             right: 0;
             bottom: 0;
             background: rgba(0,0,0,0.5);
-            z-index: 300;
+            z-index: 100;
             align-items: flex-start;
             justify-content: center;
             padding-top: 15vh;
         }
-        .palette.visible {
-            display: flex;
-        }
+        .palette.visible { display: flex; }
+
         .palette-content {
             background: var(--bg-primary);
-            border-radius: 12px;
+            border-radius: 8px;
             width: 90%;
             max-width: 500px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
             overflow: hidden;
         }
+
         .palette-input {
             width: 100%;
-            padding: 1rem 1.25rem;
-            font-size: 1.125rem;
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 14px;
             border: none;
             border-bottom: 1px solid var(--border);
             outline: none;
-            font-family: inherit;
         }
-        .palette-input::placeholder {
-            color: var(--text-muted);
-        }
-        .palette-results {
-            max-height: 300px;
-            overflow-y: auto;
-        }
+
+        .palette-results { max-height: 300px; overflow-y: auto; }
+
         .palette-item {
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 0.75rem 1.25rem;
+            align-items: center;
+            padding: 10px 16px;
             cursor: pointer;
-            border-bottom: 1px solid var(--border);
-        }
-        .palette-item:last-child {
-            border-bottom: none;
         }
         .palette-item:hover,
         .palette-item.selected {
@@ -425,23 +264,9 @@
             background: rgba(255,255,255,0.2);
             color: white;
         }
-        .palette-item.selected .palette-hint {
-            color: rgba(255,255,255,0.7);
-        }
-        .palette-name {
-            font-weight: 600;
-        }
-        .palette-meta {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        .palette-hint {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
+
         .palette-empty {
-            padding: 1.5rem;
+            padding: 24px;
             text-align: center;
             color: var(--text-muted);
         }
@@ -455,233 +280,132 @@
             right: 0;
             bottom: 0;
             background: rgba(0,0,0,0.5);
-            z-index: 200;
+            z-index: 100;
             align-items: center;
             justify-content: center;
         }
-        .help-modal.visible {
-            display: flex;
-        }
-        .help-modal-content {
+        .help-modal.visible { display: flex; }
+
+        .help-content {
             background: var(--bg-primary);
-            border-radius: 12px;
-            padding: 2rem;
-            max-width: 500px;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 400px;
             width: 90%;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
-        .help-modal h2 {
-            font-size: 1.25rem;
-            margin-bottom: 1.5rem;
-            color: var(--text-primary);
-        }
-        .help-group {
-            margin-bottom: 1.5rem;
-        }
-        .help-group h3 {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-bottom: 0.75rem;
-        }
-        .help-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.5rem 0;
-        }
-        .help-row kbd {
-            min-width: 2rem;
-            text-align: center;
         }
 
-        /* Add padding at bottom for status bar */
-        .main {
-            padding-bottom: 4rem;
+        .help-content h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .help-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
         }
     </style>
 </head>
 <body>
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <header class="header">
+        <div class="header-title">
+            <a href="/" class="header-breadcrumb">{{.Project}}</a>
+            <span>/</span>
+            <h1>{{.Workstream.Name}}</h1>
+            <span class="badge badge-{{.Workstream.State}}">{{.Workstream.State}}</span>
+            {{if .Workstream.NeedsHelp}}<span class="badge badge-help">needs help</span>{{end}}
+        </div>
+        {{if .Workstream.Owner}}<span style="color: var(--text-muted);">Owner: {{.Workstream.Owner}}</span>{{end}}
+    </header>
 
-    <div class="layout">
-        <aside class="sidebar" role="navigation" aria-label="Workstreams">
-            <div class="sidebar-header">
-                <h1><a href="/">{{.Project}}</a></h1>
+    <main class="main">
+        {{if .Workstream.Objective}}
+        <section class="section">
+            <h2 class="section-title">Objective</h2>
+            <p class="section-content">{{.Workstream.Objective}}</p>
+        </section>
+        {{end}}
+
+        {{if .Workstream.BlockedBy}}
+        <section class="section">
+            <h2 class="section-title">Blocked By</h2>
+            <div class="dep-list">
+                {{range .Workstream.BlockedBy}}
+                <span class="dep-item">{{.BlockerProject}}/{{.BlockerName}}</span>
+                {{end}}
             </div>
-            <nav class="sidebar-nav">
-                <h2 class="nav-heading">Workstreams</h2>
-                <ul class="nav-list" role="list">
-                    {{range .AllWorkstreams}}
-                    <li class="nav-item">
-                        <a href="/workstream/{{.Name}}" class="nav-link" {{if eq .Name $.Workstream.Name}}aria-current="page"{{end}}>
-                            <span class="nav-link-name">
-                                {{.Name}}
-                                {{if .NeedsHelp}}<span class="help-flag" aria-label="Needs help">!</span>{{end}}
-                            </span>
-                            <span class="badge badge-{{.State}}">{{.State}}</span>
-                        </a>
-                    </li>
-                    {{end}}
-                </ul>
-            </nav>
-        </aside>
+        </section>
+        {{end}}
 
-        <main class="main" id="main-content">
-            <header class="page-header">
-                <h2>
-                    {{.Workstream.Name}}
-                    <span class="badge badge-{{.Workstream.State}}">{{.Workstream.State}}</span>
-                    {{if .Workstream.NeedsHelp}}<span class="help-flag" aria-label="Needs help">!</span>{{end}}
-                </h2>
-                <div class="page-meta">
-                    {{if .Workstream.Owner}}<span>Owner: {{.Workstream.Owner}}</span>{{end}}
-                    <span>Updated {{.Workstream.LastUpdate.Format "Jan 2, 2006 at 15:04"}}</span>
+        {{if .Workstream.Plan}}
+        <section class="section">
+            <h2 class="section-title">Tasks ({{len .Workstream.Plan}})</h2>
+            <div>
+                {{range .Workstream.Plan}}
+                <div class="task task-{{.Status}}">
+                    <span class="task-check">
+                        {{if eq .Status "done"}}✓{{else if eq .Status "in_progress"}}▸{{else if eq .Status "skipped"}}—{{end}}
+                    </span>
+                    <div class="task-body">
+                        <div class="task-text">{{.Text}}</div>
+                        {{if .Notes}}<div class="task-notes">{{.Notes}}</div>{{end}}
+                    </div>
                 </div>
-            </header>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
 
-            <section class="section" aria-labelledby="objective-heading">
-                <header class="section-header">
-                    <h3 class="section-title" id="objective-heading">Objective</h3>
-                </header>
-                <div class="section-content">
-                    {{if .Workstream.Objective}}
-                    <p>{{.Workstream.Objective}}</p>
-                    {{else}}
-                    <p class="empty">No objective defined.</p>
-                    {{end}}
+        {{if .Workstream.Log}}
+        <section class="section">
+            <h2 class="section-title">Log ({{len .Workstream.Log}})</h2>
+            <div>
+                {{range .Workstream.Log}}
+                <div class="log-entry">
+                    <div class="log-time">{{.Timestamp.Format "2006-01-02 15:04"}}</div>
+                    <div class="log-content">{{.Content}}</div>
                 </div>
-            </section>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
 
-            {{if .Workstream.KeyContext}}
-            <section class="section" aria-labelledby="context-heading">
-                <header class="section-header">
-                    <h3 class="section-title" id="context-heading">Key Context</h3>
-                </header>
-                <div class="section-content">
-                    <p>{{.Workstream.KeyContext}}</p>
-                </div>
-            </section>
-            {{end}}
+        {{if .Workstream.Blocks}}
+        <section class="section">
+            <h2 class="section-title">Blocks</h2>
+            <div class="dep-list">
+                {{range .Workstream.Blocks}}
+                <span class="dep-item">{{.BlockedProject}}/{{.BlockedName}}</span>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+    </main>
 
-            <section class="section" aria-labelledby="tasks-heading">
-                <header class="section-header">
-                    <h3 class="section-title" id="tasks-heading">Tasks ({{len .Workstream.Plan}})</h3>
-                </header>
-                <div class="section-content">
-                    {{if .Workstream.Plan}}
-                    <ul class="task-list" role="list">
-                        {{range .Workstream.Plan}}
-                        <li class="task-item task-{{.Status}}">
-                            <span class="task-checkbox" aria-hidden="true">
-                                {{if eq .Status "done"}}✓{{else if eq .Status "in_progress"}}▸{{else if eq .Status "skipped"}}—{{end}}
-                            </span>
-                            <div class="task-body">
-                                <span class="task-text">{{.Text}}</span>
-                                {{if .Notes}}
-                                <div class="task-notes">{{.Notes}}</div>
-                                {{end}}
-                            </div>
-                        </li>
-                        {{end}}
-                    </ul>
-                    {{else}}
-                    <p class="empty">No tasks defined.</p>
-                    {{end}}
-                </div>
-            </section>
-
-            {{if or .Workstream.BlockedBy .Workstream.Blocks}}
-            <section class="section" aria-labelledby="deps-heading">
-                <header class="section-header">
-                    <h3 class="section-title" id="deps-heading">Dependencies</h3>
-                </header>
-                <div class="section-content">
-                    {{if .Workstream.BlockedBy}}
-                    <p style="font-weight: 600; margin-bottom: 0.5rem;">Blocked by:</p>
-                    <ul class="dep-list">
-                        {{range .Workstream.BlockedBy}}
-                        <li class="dep-item">{{.BlockerProject}}/{{.BlockerName}}</li>
-                        {{end}}
-                    </ul>
-                    {{end}}
-                    {{if .Workstream.Blocks}}
-                    <p style="font-weight: 600; margin-bottom: 0.5rem; {{if .Workstream.BlockedBy}}margin-top: 1rem;{{end}}">Blocks:</p>
-                    <ul class="dep-list">
-                        {{range .Workstream.Blocks}}
-                        <li class="dep-item">{{.BlockedProject}}/{{.BlockedName}}</li>
-                        {{end}}
-                    </ul>
-                    {{end}}
-                </div>
-            </section>
-            {{end}}
-
-            {{if .Workstream.Decisions}}
-            <section class="section" aria-labelledby="decisions-heading">
-                <header class="section-header">
-                    <h3 class="section-title" id="decisions-heading">Decisions</h3>
-                </header>
-                <div class="section-content">
-                    <p>{{.Workstream.Decisions}}</p>
-                </div>
-            </section>
-            {{end}}
-
-            {{if .Workstream.Log}}
-            <section class="section" aria-labelledby="log-heading">
-                <header class="section-header">
-                    <h3 class="section-title" id="log-heading">Activity Log ({{len .Workstream.Log}})</h3>
-                </header>
-                <div class="section-content">
-                    {{range .Workstream.Log}}
-                    <article class="log-item">
-                        <time class="log-time" datetime="{{.Timestamp.Format "2006-01-02T15:04:05Z"}}">{{.Timestamp.Format "2006-01-02 15:04"}}</time>
-                        <p class="log-content">{{.Content}}</p>
-                    </article>
-                    {{end}}
-                </div>
-            </section>
-            {{end}}
-        </main>
-    </div>
+    <footer class="status-bar">
+        <div class="status-shortcuts">
+            <span><kbd>Backspace</kbd> back</span>
+            <span><kbd>/</kbd> jump</span>
+            <span><kbd>?</kbd> help</span>
+        </div>
+    </footer>
 
     <!-- Command palette -->
-    <div class="palette" id="palette" role="dialog" aria-label="Jump to workstream">
+    <div class="palette" id="palette">
         <div class="palette-content">
             <input type="text" class="palette-input" id="palette-input" placeholder="Jump to workstream..." autocomplete="off">
             <div class="palette-results" id="palette-results"></div>
         </div>
     </div>
 
-    <!-- Status bar -->
-    <footer class="status-bar" role="status">
-        <div class="status-shortcuts">
-            <span class="status-shortcut"><kbd>Backspace</kbd> Back</span>
-            <span class="status-shortcut"><kbd>/</kbd> Jump</span>
-            <span class="status-shortcut"><kbd>?</kbd> Help</span>
-        </div>
-    </footer>
-
     <!-- Help modal -->
-    <div class="help-modal" id="help-modal" role="dialog" aria-labelledby="help-modal-title" aria-modal="true">
-        <div class="help-modal-content">
-            <h2 id="help-modal-title">Keyboard Shortcuts</h2>
-            <div class="help-group">
-                <h3>Navigation</h3>
-                <div class="help-row"><span>Back to dashboard</span><kbd>Backspace</kbd></div>
-                <div class="help-row"><span>Go home</span><kbd>g</kbd> <kbd>h</kbd></div>
-            </div>
-            <div class="help-group">
-                <h3>Quick Jump</h3>
-                <div class="help-row"><span>Open jump palette</span><kbd>/</kbd></div>
-            </div>
-            <div class="help-group">
-                <h3>General</h3>
-                <div class="help-row"><span>Toggle this help</span><kbd>?</kbd></div>
-            </div>
-            <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.875rem;">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</p>
+    <div class="help-modal" id="help-modal">
+        <div class="help-content">
+            <h2>Keyboard Shortcuts</h2>
+            <div class="help-row"><span>Back to dashboard</span><span><kbd>Backspace</kbd></span></div>
+            <div class="help-row"><span>Jump to workstream</span><span><kbd>/</kbd></span></div>
+            <div class="help-row"><span>Go home</span><span><kbd>g</kbd> <kbd>h</kbd></span></div>
+            <div class="help-row"><span>Close / Help</span><span><kbd>?</kbd> <kbd>Esc</kbd></span></div>
         </div>
     </div>
 
@@ -690,20 +414,16 @@
         let paletteSelectedIndex = 0;
         let filteredWorkstreams = [];
 
-        // Workstream data from server
         const workstreams = [
             {{range .AllWorkstreams}}
             { name: "{{.Name}}", state: "{{.State}}", needsHelp: {{.NeedsHelp}} },
             {{end}}
         ];
 
-        // Toggle help modal
         function toggleHelp() {
-            const modal = document.getElementById('help-modal');
-            modal.classList.toggle('visible');
+            document.getElementById('help-modal').classList.toggle('visible');
         }
 
-        // Command palette functions
         function openPalette() {
             const palette = document.getElementById('palette');
             const input = document.getElementById('palette-input');
@@ -714,15 +434,12 @@
         }
 
         function closePalette() {
-            const palette = document.getElementById('palette');
-            palette.classList.remove('visible');
+            document.getElementById('palette').classList.remove('visible');
         }
 
         function filterWorkstreams(query) {
             const q = query.toLowerCase();
-            filteredWorkstreams = workstreams.filter(ws =>
-                ws.name.toLowerCase().includes(q)
-            );
+            filteredWorkstreams = workstreams.filter(ws => ws.name.toLowerCase().includes(q));
             paletteSelectedIndex = 0;
             renderPaletteResults();
         }
@@ -735,12 +452,10 @@
             }
             container.innerHTML = filteredWorkstreams.map((ws, i) => `
                 <div class="palette-item${i === paletteSelectedIndex ? ' selected' : ''}" data-name="${ws.name}">
-                    <span class="palette-name">${ws.name}${ws.needsHelp ? ' <span class="help-flag">!</span>' : ''}</span>
+                    <span>${ws.name}${ws.needsHelp ? ' <span class="badge badge-help">!</span>' : ''}</span>
                     <span class="badge badge-${ws.state}">${ws.state}</span>
                 </div>
             `).join('');
-
-            // Add click handlers
             container.querySelectorAll('.palette-item').forEach(item => {
                 item.addEventListener('click', () => {
                     window.location.href = '/workstream/' + item.dataset.name;
@@ -757,25 +472,20 @@
         function openPaletteSelected() {
             if (filteredWorkstreams.length === 0) return;
             const ws = filteredWorkstreams[paletteSelectedIndex];
-            if (ws) {
-                window.location.href = '/workstream/' + ws.name;
-            }
+            if (ws) window.location.href = '/workstream/' + ws.name;
         }
 
-        // Palette input handler
         document.getElementById('palette-input').addEventListener('input', (e) => {
             filterWorkstreams(e.target.value);
         });
 
         document.getElementById('palette-input').addEventListener('keydown', (e) => {
             switch (e.key) {
-                case 'ArrowDown':
-                case '.':
+                case 'ArrowDown': case '.':
                     selectPaletteItem(paletteSelectedIndex + 1);
                     e.preventDefault();
                     break;
-                case 'ArrowUp':
-                case ',':
+                case 'ArrowUp': case ',':
                     selectPaletteItem(paletteSelectedIndex - 1);
                     e.preventDefault();
                     break;
@@ -790,59 +500,30 @@
             }
         });
 
-        // Close palette on outside click
         document.getElementById('palette').addEventListener('click', (e) => {
-            if (e.target.id === 'palette') {
-                closePalette();
-            }
+            if (e.target.id === 'palette') closePalette();
         });
 
-        // Keyboard handler
         document.addEventListener('keydown', (e) => {
-            // Palette is open - handled by input
-            if (document.getElementById('palette').classList.contains('visible')) {
-                return;
-            }
-
-            // Ignore if typing in other inputs
+            if (document.getElementById('palette').classList.contains('visible')) return;
             if (e.target.matches('input, textarea')) return;
 
-            // Handle pending g command
             if (pendingG) {
                 pendingG = false;
-                if (e.key === 'h') {
-                    window.location.href = '/';
-                    return;
-                }
+                if (e.key === 'h') { window.location.href = '/'; return; }
             }
 
-            // Help modal open - only allow ? and Esc to close
             const helpModal = document.getElementById('help-modal');
             if (helpModal.classList.contains('visible')) {
-                if (e.key === '?' || e.key === 'Escape') {
-                    toggleHelp();
-                    e.preventDefault();
-                }
+                if (e.key === '?' || e.key === 'Escape') { toggleHelp(); e.preventDefault(); }
                 return;
             }
 
             switch (e.key) {
-                case 'Backspace':
-                    window.location.href = '/';
-                    e.preventDefault();
-                    break;
-                case 'g':
-                    pendingG = true;
-                    setTimeout(() => { pendingG = false; }, 1000);
-                    break;
-                case '?':
-                    toggleHelp();
-                    e.preventDefault();
-                    break;
-                case '/':
-                    openPalette();
-                    e.preventDefault();
-                    break;
+                case 'Backspace': window.location.href = '/'; e.preventDefault(); break;
+                case 'g': pendingG = true; setTimeout(() => pendingG = false, 1000); break;
+                case '?': toggleHelp(); e.preventDefault(); break;
+                case '/': openPalette(); e.preventDefault(); break;
             }
         });
     </script>

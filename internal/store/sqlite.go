@@ -624,7 +624,12 @@ func (s *Store) Delete(project, name string) error {
 // RecentActivity returns recent log entries across all workstreams for a project
 func (s *Store) RecentActivity(project string, limit int) ([]workstream.ActivityEntry, error) {
 	rows, err := s.db.Query(`
-		SELECT w.name, w.project, l.timestamp, l.content
+		SELECT w.name, w.project, l.timestamp, l.content, w.needs_help,
+			(SELECT b.project || '/' || b.name
+			 FROM workstream_dependencies d
+			 JOIN workstreams b ON d.blocker_id = b.id
+			 WHERE d.blocked_id = w.id
+			 LIMIT 1)
 		FROM log_entries l
 		JOIN workstreams w ON l.workstream_id = w.id
 		WHERE w.project = ?
@@ -640,10 +645,30 @@ func (s *Store) RecentActivity(project string, limit int) ([]workstream.Activity
 	var entries []workstream.ActivityEntry
 	for rows.Next() {
 		var entry workstream.ActivityEntry
-		if err := rows.Scan(&entry.WorkstreamName, &entry.WorkstreamProject, &entry.Timestamp, &entry.Content); err != nil {
+		var blockedBy *string
+		if err := rows.Scan(&entry.WorkstreamName, &entry.WorkstreamProject, &entry.Timestamp, &entry.Content, &entry.NeedsHelp, &blockedBy); err != nil {
 			return nil, err
 		}
+		if blockedBy != nil {
+			entry.BlockedBy = *blockedBy
+		}
+		entry.RelativeTime = relativeTime(entry.Timestamp)
 		entries = append(entries, entry)
 	}
 	return entries, nil
+}
+
+// relativeTime returns a human-readable relative time string
+func relativeTime(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
 }
