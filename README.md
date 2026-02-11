@@ -140,6 +140,51 @@ Restart Claude Code. Add `.streamctl/` to `.gitignore`.
 
 ---
 
+## CLAUDE.md Integration
+
+Add this to your project's `CLAUDE.md` to enable automatic workstream usage:
+
+```markdown
+## Workstreams
+
+This project uses streamctl for persistent workstream tracking across sessions.
+
+**At session start:**
+1. Run `workstream_list(project="PROJECT_NAME")` to see active work
+2. Run `workstream_get(project, name)` for any in_progress or blocked workstreams
+3. Resume from where the last session left off
+
+**During work:**
+- Create workstreams for non-trivial features: `workstream_create(project, name, objective)`
+- Log significant progress and decisions: `workstream_update(project, name, log_entry="...")`
+- Update state honestly: pending → in_progress → done/blocked
+
+**At session end:**
+- Update workstream with current state and what's next
+- Include decisions made and their rationale
+
+**Workstream granularity:**
+- One workstream per feature or independent unit of work
+- Not for small tasks - those are ephemeral
+- Log decisions, not every code change
+```
+
+For global usage across all projects, add to `~/.claude/CLAUDE.md`:
+
+```markdown
+## Workstreams
+
+Use streamctl MCP tools for persistent workstream tracking:
+- `workstream_list` - See active work across projects
+- `workstream_get` - Read full context before resuming
+- `workstream_create` - Start tracking a new unit of work
+- `workstream_update` - Log progress, decisions, state changes
+
+At session start, check for existing workstreams. At session end, update state and log what's next.
+```
+
+---
+
 ## Reference
 
 ### MCP Tools
