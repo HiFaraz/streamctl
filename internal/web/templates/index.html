@@ -562,6 +562,15 @@
                     closePalette();
                     e.preventDefault();
                     break;
+                case 'Backspace':
+                    if (e.target.value === '' && paletteMode === 'jump') {
+                        paletteMode = 'actions';
+                        paletteSelectedIndex = 0;
+                        e.target.placeholder = 'Type to jump, or select action...';
+                        renderPaletteResults();
+                        e.preventDefault();
+                    }
+                    break;
             }
         });
 
