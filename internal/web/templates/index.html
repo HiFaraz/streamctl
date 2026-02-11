@@ -292,7 +292,7 @@
     <main class="feed" id="feed">
         {{if .Activity}}
         {{range $i, $entry := .Activity}}
-        <article class="feed-item{{if eq $i 0}} selected{{end}}" data-index="{{$i}}" data-workstream="{{$entry.WorkstreamName}}">
+        <article class="feed-item{{if eq $i 0}} selected{{end}}" data-index="{{$i}}" data-workstream="{{$entry.WorkstreamName}}" data-timestamp="{{$entry.Timestamp.Unix}}">
             <div class="feed-name">
                 {{$entry.WorkstreamName}}
                 {{if $entry.NeedsHelp}}<span class="badge badge-help">!</span>{{end}}
@@ -371,8 +371,10 @@
         function openSelected() {
             const items = getFeedItems();
             if (items.length === 0) return;
-            const ws = items[selectedIndex]?.dataset.workstream;
-            if (ws) window.location.href = '/workstream/' + ws;
+            const item = items[selectedIndex];
+            const ws = item?.dataset.workstream;
+            const ts = item?.dataset.timestamp;
+            if (ws) window.location.href = '/workstream/' + ws + (ts ? '#log-' + ts : '');
         }
 
         function toggleHelp() {
