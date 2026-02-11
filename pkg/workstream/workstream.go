@@ -26,7 +26,8 @@ const (
 type PlanItem struct {
 	Text     string
 	Status   TaskStatus
-	Complete bool // Deprecated: use Status instead
+	Notes    string // Markdown-formatted notes (code snippets, details, links)
+	Complete bool   // Deprecated: use Status instead
 }
 
 // LogEntry represents a timestamped log entry

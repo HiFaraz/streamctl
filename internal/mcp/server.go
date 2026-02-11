@@ -63,6 +63,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithString("task_add", mcp.Description("Add a new task with this text")),
 			mcp.WithNumber("task_remove", mcp.Description("Remove task at this position (0-indexed)")),
 			mcp.WithObject("task_status", mcp.Description("Set task status: {\"position\": 0, \"status\": \"done\"}")),
+			mcp.WithObject("task_notes", mcp.Description("Set task notes (markdown): {\"position\": 0, \"notes\": \"## Details\\n- item\"}")),
 			mcp.WithString("add_blocker", mcp.Description("Add dependency: 'project/workstream' blocks this one")),
 			mcp.WithString("remove_blocker", mcp.Description("Remove dependency from this workstream")),
 		),
@@ -232,6 +233,17 @@ func (h *Handlers) HandleUpdate(ctx context.Context, req mcp.CallToolRequest) (*
 			position := int(statusObj["position"].(float64))
 			status := workstream.TaskStatus(statusObj["status"].(string))
 			if err := h.store.SetTaskStatus(project, name, position, status); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+	}
+
+	// Handle task_notes
+	if args != nil {
+		if notesObj, ok := args["task_notes"].(map[string]any); ok {
+			position := int(notesObj["position"].(float64))
+			notes := notesObj["notes"].(string)
+			if err := h.store.SetTaskNotes(project, name, position, notes); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}

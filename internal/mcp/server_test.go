@@ -328,6 +328,37 @@ func TestHandleUpdateTaskStatus(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateTaskNotes(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+				"name":    "Feature One",
+				"task_notes": map[string]any{
+					"position": float64(0),
+					"notes":    "## Details\n- Item 1\n```go\ncode\n```",
+				},
+			},
+		},
+	}
+	result, err := h.HandleUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleUpdate() returned error result")
+	}
+
+	// Verify notes set
+	ws, _ := st.Get("testproject", "Feature One")
+	if ws.Plan[0].Notes != "## Details\n- Item 1\n```go\ncode\n```" {
+		t.Errorf("Notes = %q, want markdown content", ws.Plan[0].Notes)
+	}
+}
+
 func TestHandleUpdateAddBlocker(t *testing.T) {
 	st := setupTestStore(t)
 	h := NewHandlers(st)

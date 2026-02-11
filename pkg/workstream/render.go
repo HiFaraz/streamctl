@@ -80,6 +80,15 @@ func Render(ws *Workstream) string {
 			}
 		}
 		b.WriteString(fmt.Sprintf("%d. %s %s\n", i+1, marker, item.Text))
+		if item.Notes != "" {
+			// Indent notes under the task
+			lines := strings.Split(item.Notes, "\n")
+			for _, line := range lines {
+				b.WriteString("   ")
+				b.WriteString(line)
+				b.WriteString("\n")
+			}
+		}
 	}
 	b.WriteString("\n")
 

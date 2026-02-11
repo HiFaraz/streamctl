@@ -141,6 +141,33 @@ func TestRenderTaskStatus(t *testing.T) {
 	}
 }
 
+func TestRenderTaskNotes(t *testing.T) {
+	ws := &Workstream{
+		Name:       "Notes Test",
+		State:      StateInProgress,
+		LastUpdate: time.Now(),
+		Objective:  "Test notes rendering.",
+		Plan: []PlanItem{
+			{Text: "Task with notes", Status: TaskInProgress, Notes: "## Details\n- Item 1\n- Item 2"},
+			{Text: "Task without notes", Status: TaskPending},
+		},
+	}
+
+	output := Render(ws)
+
+	// Notes should be indented under the task
+	if !strings.Contains(output, "1. [>] Task with notes\n   ## Details") {
+		t.Errorf("Notes not rendered correctly under task")
+	}
+	if !strings.Contains(output, "   - Item 1") {
+		t.Errorf("Notes lines not indented")
+	}
+	// Task without notes should not have extra indented lines
+	if strings.Contains(output, "2. [ ] Task without notes\n   ") {
+		t.Errorf("Empty notes should not add indented lines")
+	}
+}
+
 func TestRenderDependencies(t *testing.T) {
 	ws := &Workstream{
 		Name:       "Dependency Test",

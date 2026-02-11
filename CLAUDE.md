@@ -33,7 +33,7 @@ streamctl/                    # This repo
 
 ```sql
 workstreams (id, project, name, state, owner, objective, key_context, decisions, last_update, created_at)
-plan_items (id, workstream_id, position, text, complete, status)
+plan_items (id, workstream_id, position, text, complete, status, notes)
 log_entries (id, workstream_id, timestamp, content)
 workstream_dependencies (blocker_id, blocked_id, created_at)
 ```
@@ -60,10 +60,12 @@ workstream_dependencies (blocker_id, blocked_id, created_at)
 | `task_add` | string | Add new task with this text |
 | `task_remove` | number | Remove task at position (0-indexed) |
 | `task_status` | object | Set task status: `{"position": 0, "status": "done"}` |
+| `task_notes` | object | Set task notes (markdown): `{"position": 0, "notes": "..."}` |
 | `add_blocker` | string | Add dependency: `project/name` blocks this workstream |
 | `remove_blocker` | string | Remove dependency |
 
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
+**Task notes:** Supports markdown (code blocks, lists, links, headers)
 
 ## TUI Features
 

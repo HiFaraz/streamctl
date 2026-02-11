@@ -75,7 +75,8 @@ func (s *Store) migrate() error {
 		position INTEGER NOT NULL,
 		text TEXT NOT NULL,
 		complete BOOLEAN DEFAULT FALSE,
-		status TEXT NOT NULL DEFAULT 'pending'
+		status TEXT NOT NULL DEFAULT 'pending',
+		notes TEXT NOT NULL DEFAULT ''
 	);
 
 	CREATE TABLE IF NOT EXISTS log_entries (
@@ -112,6 +113,13 @@ func (s *Store) migrate() error {
 		}
 		// Migrate existing data: complete=true -> done, complete=false -> pending
 		if _, err := s.db.Exec(`UPDATE plan_items SET status = CASE WHEN complete THEN 'done' ELSE 'pending' END`); err != nil {
+			return err
+		}
+	}
+
+	// Migration: Add notes column to plan_items if missing
+	if !s.columnExists("plan_items", "notes") {
+		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN notes TEXT NOT NULL DEFAULT ''`); err != nil {
 			return err
 		}
 	}
@@ -216,7 +224,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 
 	// Load plan items
 	rows, err := s.db.Query(`
-		SELECT text, complete, status FROM plan_items
+		SELECT text, complete, status, notes FROM plan_items
 		WHERE workstream_id = ? ORDER BY position`,
 		wsID,
 	)
@@ -227,7 +235,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 
 	for rows.Next() {
 		var item workstream.PlanItem
-		if err := rows.Scan(&item.Text, &item.Complete, &item.Status); err != nil {
+		if err := rows.Scan(&item.Text, &item.Complete, &item.Status, &item.Notes); err != nil {
 			return nil, err
 		}
 		ws.Plan = append(ws.Plan, item)
@@ -349,13 +357,13 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 		}
 
 		// Load plan items
-		planRows, err := s.db.Query(`SELECT text, complete, status FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
+		planRows, err := s.db.Query(`SELECT text, complete, status, notes FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
 		if err != nil {
 			return nil, err
 		}
 		for planRows.Next() {
 			var item workstream.PlanItem
-			planRows.Scan(&item.Text, &item.Complete, &item.Status)
+			planRows.Scan(&item.Text, &item.Complete, &item.Status, &item.Notes)
 			ws.Plan = append(ws.Plan, item)
 		}
 		planRows.Close()
@@ -561,6 +569,24 @@ func (s *Store) RemoveDependency(blockerProject, blockerName, blockedProject, bl
 	}
 
 	_, err = s.db.Exec(`DELETE FROM workstream_dependencies WHERE blocker_id = ? AND blocked_id = ?`, blockerID, blockedID)
+	return err
+}
+
+// SetTaskNotes sets the notes for a task at the given position
+func (s *Store) SetTaskNotes(project, name string, position int, notes string) error {
+	var wsID int64
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, project, name).Scan(&wsID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE plan_items SET notes = ? WHERE workstream_id = ? AND position = ?`,
+		notes, wsID, position)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
 	return err
 }
 

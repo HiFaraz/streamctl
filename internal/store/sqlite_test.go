@@ -299,6 +299,33 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+func TestTaskNotes(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{
+		Name:    "Notes Test",
+		Project: "proj",
+		State:   workstream.StatePending,
+	})
+
+	// Add task
+	s.AddTask("proj", "Notes Test", "Task with notes")
+
+	// Set notes with markdown
+	notes := "## Details\n- Item 1\n- Item 2\n\n```go\nfunc main() {}\n```"
+	err := s.SetTaskNotes("proj", "Notes Test", 0, notes)
+	if err != nil {
+		t.Fatalf("SetTaskNotes() error = %v", err)
+	}
+
+	got, _ := s.Get("proj", "Notes Test")
+	if got.Plan[0].Notes != notes {
+		t.Errorf("Notes = %q, want %q", got.Plan[0].Notes, notes)
+	}
+}
+
 func TestSetTaskStatus(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	s, _ := New(dbPath)
@@ -467,7 +494,7 @@ func TestAddDependency(t *testing.T) {
 func TestMigrateExistingDatabase(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	// Create old-style database manually (without status column)
+	// Create old-style database manually (without status or notes columns)
 	db, _ := sql.Open("sqlite3", dbPath)
 	db.Exec(`
 		CREATE TABLE workstreams (
@@ -520,6 +547,10 @@ func TestMigrateExistingDatabase(t *testing.T) {
 	// Old complete=true should become status=done
 	if ws.Plan[0].Status != workstream.TaskDone {
 		t.Errorf("Status = %q, want 'done' (migrated from complete=true)", ws.Plan[0].Status)
+	}
+	// Notes should default to empty
+	if ws.Plan[0].Notes != "" {
+		t.Errorf("Notes = %q, want empty string", ws.Plan[0].Notes)
 	}
 
 	// Verify dependencies table exists

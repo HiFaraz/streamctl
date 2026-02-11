@@ -20,10 +20,12 @@ Add these new MCP tool parameters to your `~/.claude/CLAUDE.md` workstream docum
 | `task_add` | string | Add new task with this text |
 | `task_remove` | number | Remove task at position (0-indexed) |
 | `task_status` | object | Set status: `{"position": 0, "status": "done"}` |
+| `task_notes` | object | Set notes (markdown): `{"position": 0, "notes": "..."}` |
 | `add_blocker` | string | Add dependency: `project/name` blocks this workstream |
 | `remove_blocker` | string | Remove dependency |
 
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
+**Task notes:** Supports markdown (code blocks, lists, links, headers)
 ```
 
 ### 2. Rebuild and Restart MCP Server
@@ -90,6 +92,7 @@ Plan items now support status tracking beyond simple completion:
 | `task_add` | string | Add a new task with this text |
 | `task_remove` | number | Remove task at this position (0-indexed) |
 | `task_status` | object | Set task status: `{"position": 0, "status": "done"}` |
+| `task_notes` | object | Set task notes (markdown): `{"position": 0, "notes": "..."}` |
 
 **Examples:**
 ```
@@ -107,6 +110,9 @@ workstream_update(project="myapp", name="auth", task_status={"position": 1, "sta
 
 # Remove a task
 workstream_update(project="myapp", name="auth", task_remove=2)
+
+# Add notes to a task (supports markdown: code blocks, lists, links)
+workstream_update(project="myapp", name="auth", task_notes={"position": 0, "notes": "## Details\n- Use RS256 algorithm\n- Token expiry: 1 hour\n\n```go\ntoken := jwt.New()\n```"})
 ```
 
 #### Structured Dependencies
