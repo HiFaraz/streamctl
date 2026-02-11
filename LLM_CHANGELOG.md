@@ -26,7 +26,23 @@ Add these new MCP tool parameters to your `~/.claude/CLAUDE.md` workstream docum
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
 ```
 
-### 2. Update Your Permissions
+### 2. Rebuild and Restart MCP Server
+
+The database schema auto-migrates on startup. You must:
+
+```bash
+cd ~/streamctl
+go build -o streamctl ./cmd/streamctl
+# Then restart your MCP server (close and reopen Claude Code, or restart the streamctl process)
+```
+
+The migration automatically:
+- Adds `status` column to plan_items
+- Converts `complete=true` to `status=done`
+- Converts `complete=false` to `status=pending`
+- Creates `workstream_dependencies` table
+
+### 3. Update Your Permissions
 
 Add these MCP commands to your allowed permissions in `~/.claude/settings.json` or approve them when prompted:
 
@@ -34,7 +50,7 @@ Add these MCP commands to your allowed permissions in `~/.claude/settings.json` 
 mcp__streamctl__workstream_update (with task_add, task_remove, task_status, add_blocker, remove_blocker)
 ```
 
-### 3. Backfill Your Existing Workstreams
+### 4. Backfill Your Existing Workstreams
 
 For each active workstream, update task statuses and add dependencies:
 
@@ -50,7 +66,7 @@ workstream_update(project="X", name="Y", task_status={"position": 1, "status": "
 workstream_update(project="X", name="downstream", add_blocker="X/upstream")
 ```
 
-### 4. Adopt New Workflow
+### 5. Adopt New Workflow
 
 - When starting a task: set status to `in_progress`
 - When completing a task: set status to `done`

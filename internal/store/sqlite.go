@@ -51,8 +51,9 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// migrate creates the database schema
+// migrate creates the database schema and runs migrations for existing databases
 func (s *Store) migrate() error {
+	// Base schema (for new databases)
 	schema := `
 	CREATE TABLE IF NOT EXISTS workstreams (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,8 +101,45 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_deps_blocker ON workstream_dependencies(blocker_id);
 	CREATE INDEX IF NOT EXISTS idx_deps_blocked ON workstream_dependencies(blocked_id);
 	`
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Migration: Add status column to plan_items if missing
+	if !s.columnExists("plan_items", "status") {
+		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`); err != nil {
+			return err
+		}
+		// Migrate existing data: complete=true -> done, complete=false -> pending
+		if _, err := s.db.Exec(`UPDATE plan_items SET status = CASE WHEN complete THEN 'done' ELSE 'pending' END`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// columnExists checks if a column exists in a table
+func (s *Store) columnExists(table, column string) bool {
+	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
 }
 
 // Create creates a new workstream

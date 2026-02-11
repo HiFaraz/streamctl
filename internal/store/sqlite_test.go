@@ -1,9 +1,12 @@
 package store
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/faraz/streamctl/pkg/workstream"
 )
@@ -458,6 +461,71 @@ func TestAddDependency(t *testing.T) {
 	}
 	if auth.Blocks[0].BlockedName != "api" {
 		t.Errorf("Blocks[0].BlockedName = %q, want 'api'", auth.Blocks[0].BlockedName)
+	}
+}
+
+func TestMigrateExistingDatabase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	// Create old-style database manually (without status column)
+	db, _ := sql.Open("sqlite3", dbPath)
+	db.Exec(`
+		CREATE TABLE workstreams (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			project TEXT NOT NULL,
+			name TEXT NOT NULL,
+			state TEXT NOT NULL DEFAULT 'pending',
+			owner TEXT DEFAULT '',
+			objective TEXT DEFAULT '',
+			key_context TEXT DEFAULT '',
+			decisions TEXT DEFAULT '',
+			last_update DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(project, name)
+		);
+		CREATE TABLE plan_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			workstream_id INTEGER NOT NULL,
+			position INTEGER NOT NULL,
+			text TEXT NOT NULL,
+			complete BOOLEAN DEFAULT FALSE
+		);
+		CREATE TABLE log_entries (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			workstream_id INTEGER NOT NULL,
+			timestamp DATETIME NOT NULL,
+			content TEXT NOT NULL
+		);
+	`)
+	// Insert old-style data
+	db.Exec(`INSERT INTO workstreams (project, name, state, last_update) VALUES ('proj', 'test', 'pending', datetime('now'))`)
+	db.Exec(`INSERT INTO plan_items (workstream_id, position, text, complete) VALUES (1, 0, 'Old task', 1)`)
+	db.Close()
+
+	// Open with store (should migrate)
+	s, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer s.Close()
+
+	// Verify status column exists and old data migrated
+	ws, err := s.Get("proj", "test")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if len(ws.Plan) != 1 {
+		t.Fatalf("Plan length = %d, want 1", len(ws.Plan))
+	}
+	// Old complete=true should become status=done
+	if ws.Plan[0].Status != workstream.TaskDone {
+		t.Errorf("Status = %q, want 'done' (migrated from complete=true)", ws.Plan[0].Status)
+	}
+
+	// Verify dependencies table exists
+	_, err = s.db.Exec("SELECT 1 FROM workstream_dependencies LIMIT 1")
+	if err != nil {
+		t.Errorf("workstream_dependencies table missing after migration: %v", err)
 	}
 }
 
