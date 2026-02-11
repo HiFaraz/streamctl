@@ -140,47 +140,38 @@ Restart Claude Code. Add `.streamctl/` to `.gitignore`.
 
 ---
 
-## CLAUDE.md Integration
+## Prompts
 
-Add this to your project's `CLAUDE.md` to enable automatic workstream usage:
+### Starting a Session
 
-```markdown
-## Workstreams
+Paste this to resume work:
 
-This project uses streamctl for persistent workstream tracking across sessions.
-
-**At session start:**
-1. Run `workstream_list(project="PROJECT_NAME")` to see active work
-2. Run `workstream_get(project, name)` for any in_progress or blocked workstreams
-3. Resume from where the last session left off
-
-**During work:**
-- Create workstreams for non-trivial features: `workstream_create(project, name, objective)`
-- Log significant progress and decisions: `workstream_update(project, name, log_entry="...")`
-- Update state honestly: pending → in_progress → done/blocked
-
-**At session end:**
-- Update workstream with current state and what's next
-- Include decisions made and their rationale
-
-**Workstream granularity:**
-- One workstream per feature or independent unit of work
-- Not for small tasks - those are ephemeral
-- Log decisions, not every code change
+```
+Check workstreams for this project using workstream_list. For any in_progress or blocked workstreams, read the full context with workstream_get and resume from where we left off.
 ```
 
-For global usage across all projects, add to `~/.claude/CLAUDE.md`:
+### Creating Workstreams
 
-```markdown
-## Workstreams
+Paste this when starting new work:
 
-Use streamctl MCP tools for persistent workstream tracking:
-- `workstream_list` - See active work across projects
-- `workstream_get` - Read full context before resuming
-- `workstream_create` - Start tracking a new unit of work
-- `workstream_update` - Log progress, decisions, state changes
+```
+Create workstreams for the independent units of work in this task. Use workstream_create with clear objectives. As you work, log significant progress and decisions with workstream_update.
+```
 
-At session start, check for existing workstreams. At session end, update state and log what's next.
+### Ending a Session
+
+Paste this before ending:
+
+```
+Update all workstreams you worked on. Log what was accomplished, decisions made with rationale, and what's next. Set state to done, blocked, or in_progress as appropriate.
+```
+
+### Full Context (for new Claude Code instances)
+
+Paste this once to teach Claude Code about streamctl:
+
+```
+Read ~/streamctl/README.md to learn about workstream tracking. Use the streamctl MCP tools (workstream_list, workstream_get, workstream_create, workstream_update) to persist context across sessions. Check for existing workstreams at session start. Log progress and decisions during work. Update state at session end.
 ```
 
 ---
