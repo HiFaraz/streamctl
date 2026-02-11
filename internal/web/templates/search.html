@@ -226,11 +226,11 @@
             let wsFilter = '';
             let query = raw;
 
-            // Extract ws:name filter
-            const wsMatch = raw.match(/ws:(\S+)/);
+            // Extract ws:name filter (recognize as filter as soon as colon is typed)
+            const wsMatch = raw.match(/ws:(\S*)/);
             if (wsMatch) {
                 wsFilter = wsMatch[1];
-                query = raw.replace(/ws:\S+/, '').trim();
+                query = raw.replace(/ws:\S*/, '').trim();
             }
 
             return { query, wsFilter };
