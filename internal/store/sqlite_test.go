@@ -112,8 +112,9 @@ func TestCreateWithLogEntries(t *testing.T) {
 	if len(got.Log) != 2 {
 		t.Fatalf("Log length = %d, want 2", len(got.Log))
 	}
-	if got.Log[0].Content != "First entry" {
-		t.Errorf("Log[0].Content = %q, want 'First entry'", got.Log[0].Content)
+	// Logs are returned newest first
+	if got.Log[0].Content != "Second entry" {
+		t.Errorf("Log[0].Content = %q, want 'Second entry' (newest first)", got.Log[0].Content)
 	}
 }
 
@@ -613,5 +614,77 @@ func TestPlanItemStatus(t *testing.T) {
 	}
 	if got.Plan[3].Status != workstream.TaskSkipped {
 		t.Errorf("Plan[3].Status = %q, want skipped", got.Plan[3].Status)
+	}
+}
+
+func TestRecentActivity(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams with log entries
+	s.Create(&workstream.Workstream{
+		Name: "ws1", Project: "proj", State: workstream.StatePending,
+		Log: []workstream.LogEntry{
+			{Timestamp: time.Now().Add(-2 * time.Hour), Content: "Old entry"},
+		},
+	})
+	s.Create(&workstream.Workstream{
+		Name: "ws2", Project: "proj", State: workstream.StatePending,
+		Log: []workstream.LogEntry{
+			{Timestamp: time.Now().Add(-1 * time.Hour), Content: "Recent entry"},
+		},
+	})
+
+	// Add another entry
+	logEntry := "Newest entry"
+	s.Update("proj", "ws1", WorkstreamUpdate{LogEntry: &logEntry})
+
+	activity, err := s.RecentActivity("proj", 10)
+	if err != nil {
+		t.Fatalf("RecentActivity() error = %v", err)
+	}
+
+	if len(activity) != 3 {
+		t.Fatalf("RecentActivity() = %d entries, want 3", len(activity))
+	}
+
+	// Should be ordered by timestamp descending (newest first)
+	if activity[0].Content != "Newest entry" {
+		t.Errorf("activity[0].Content = %q, want 'Newest entry'", activity[0].Content)
+	}
+}
+
+func TestNeedsHelp(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{
+		Name: "test", Project: "proj", State: workstream.StateInProgress,
+	})
+
+	// Initially false
+	ws, _ := s.Get("proj", "test")
+	if ws.NeedsHelp {
+		t.Error("NeedsHelp should be false initially")
+	}
+
+	// Set to true
+	needsHelp := true
+	s.Update("proj", "test", WorkstreamUpdate{NeedsHelp: &needsHelp})
+
+	ws, _ = s.Get("proj", "test")
+	if !ws.NeedsHelp {
+		t.Error("NeedsHelp should be true after update")
+	}
+
+	// Set back to false
+	needsHelp = false
+	s.Update("proj", "test", WorkstreamUpdate{NeedsHelp: &needsHelp})
+
+	ws, _ = s.Get("proj", "test")
+	if ws.NeedsHelp {
+		t.Error("NeedsHelp should be false after clearing")
 	}
 }

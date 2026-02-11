@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -420,5 +421,32 @@ func TestHandleUpdateRemoveBlocker(t *testing.T) {
 	ws, _ := st.Get("testproject", "Feature Two")
 	if len(ws.BlockedBy) != 0 {
 		t.Errorf("BlockedBy length = %d, want 0", len(ws.BlockedBy))
+	}
+}
+
+func TestHandleWebServe(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+			},
+		},
+	}
+
+	result, err := h.HandleWebServe(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleWebServe() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleWebServe() returned error result")
+	}
+
+	// Result should contain a URL
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "http://localhost:") {
+		t.Errorf("Result should contain localhost URL, got: %s", text)
 	}
 }

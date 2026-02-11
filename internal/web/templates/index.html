@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Project}} - Workstreams Dashboard</title>
+    <style>
+        /* WCAG 2.2 AAA Compliant Styles */
+        :root {
+            --text-primary: #1a1a1a;      /* 16:1 contrast on white */
+            --text-secondary: #4a4a4a;    /* 9:1 contrast on white */
+            --text-muted: #595959;        /* 7:1 contrast on white - AAA compliant */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f8f8;
+            --bg-tertiary: #f0f0f0;
+            --border: #d0d0d0;
+            --focus: #0055cc;
+            --focus-outline: #0055cc;
+            --link: #0055cc;              /* 7:1 contrast on white */
+            --link-hover: #003d99;
+            --status-alert: #b91c1c;      /* 7:1 on white */
+            --status-alert-bg: #fef2f2;
+            --status-warning: #92400e;    /* 7:1 on white */
+            --status-warning-bg: #fffbeb;
+            --status-success: #166534;    /* 7:1 on white */
+            --status-success-bg: #f0fdf4;
+            --status-neutral: #4a4a4a;
+            --status-neutral-bg: #f5f5f5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }
+
+        /* Skip link for keyboard users */
+        .skip-link {
+            position: absolute;
+            top: -100px;
+            left: 0;
+            padding: 1rem;
+            background: var(--focus);
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            z-index: 1000;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Focus styles - AAA compliant */
+        :focus {
+            outline: 3px solid var(--focus-outline);
+            outline-offset: 2px;
+        }
+        :focus:not(:focus-visible) {
+            outline: none;
+        }
+        :focus-visible {
+            outline: 3px solid var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        /* Layout */
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav {
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .nav-heading {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-list {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            border-radius: 6px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 500;
+            transition: background-color 0.15s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .nav-link[aria-current="page"] {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+        }
+
+        .nav-link-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-pending { background: var(--status-neutral-bg); color: var(--status-neutral); }
+        .badge-in_progress { background: var(--status-warning-bg); color: var(--status-warning); }
+        .badge-blocked { background: var(--status-alert-bg); color: var(--status-alert); }
+        .badge-done { background: var(--status-success-bg); color: var(--status-success); }
+
+        .help-flag {
+            color: var(--status-alert);
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        /* Main content */
+        .main {
+            flex: 1;
+            margin-left: 300px;
+            padding: 2rem;
+        }
+
+        /* Help banner */
+        .help-banner {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .help-banner h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .help-banner p {
+            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .keyboard-shortcuts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .shortcut {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        kbd {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            font-family: inherit;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+
+        /* Page header */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+
+        .page-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .live-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--status-success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Insight cards */
+        .insights {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .insight-card {
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .insight-card.alert {
+            border-color: var(--status-alert);
+            background: var(--status-alert-bg);
+        }
+
+        .insight-card.warning {
+            border-color: var(--status-warning);
+            background: var(--status-warning-bg);
+        }
+
+        .insight-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .insight-card.alert .insight-label { color: var(--status-alert); }
+        .insight-card.warning .insight-label { color: var(--status-warning); }
+
+        .insight-count {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .insight-card.alert .insight-count { color: var(--status-alert); }
+        .insight-card.warning .insight-count { color: var(--status-warning); }
+
+        .insight-list {
+            list-style: none;
+            margin-top: 0.75rem;
+        }
+
+        .insight-list li {
+            margin-bottom: 0.25rem;
+        }
+
+        .insight-list a {
+            color: var(--link);
+            text-decoration: underline;
+            font-weight: 500;
+        }
+
+        .insight-list a:hover {
+            color: var(--link-hover);
+        }
+
+        /* Content sections */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .section-content {
+            padding: 0;
+        }
+
+        /* Activity items */
+        .activity-item {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .activity-workstream {
+            font-weight: 600;
+            color: var(--link);
+            text-decoration: underline;
+        }
+
+        .activity-workstream:hover {
+            color: var(--link-hover);
+        }
+
+        .activity-time {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .activity-content {
+            color: var(--text-secondary);
+            line-height: 1.5;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        /* Workstream list items */
+        .ws-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ws-item:last-child {
+            border-bottom: none;
+        }
+
+        .ws-link {
+            font-weight: 600;
+            color: var(--link);
+            text-decoration: underline;
+        }
+
+        .ws-link:hover {
+            color: var(--link-hover);
+        }
+
+        .ws-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Empty state */
+        .empty {
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Keyboard-native selection */
+        .activity-item.selected {
+            background: var(--focus);
+            color: white;
+            border-left: 4px solid var(--link-hover);
+            margin-left: -4px;
+        }
+        .activity-item.selected .activity-workstream {
+            color: white;
+        }
+        .activity-item.selected .activity-time {
+            color: rgba(255,255,255,0.8);
+        }
+        .activity-item.selected .activity-content {
+            color: rgba(255,255,255,0.95);
+        }
+
+        /* Status bar */
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 300px;
+            right: 0;
+            background: var(--text-primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            z-index: 100;
+        }
+        .status-bar kbd {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.3);
+            color: white;
+        }
+        .status-shortcuts {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .status-shortcut {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--status-success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        /* Command palette */
+        .palette {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 300;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 15vh;
+        }
+        .palette.visible {
+            display: flex;
+        }
+        .palette-content {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .palette-input {
+            width: 100%;
+            padding: 1rem 1.25rem;
+            font-size: 1.125rem;
+            border: none;
+            border-bottom: 1px solid var(--border);
+            outline: none;
+            font-family: inherit;
+        }
+        .palette-input::placeholder {
+            color: var(--text-muted);
+        }
+        .palette-results {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .palette-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+        .palette-item:last-child {
+            border-bottom: none;
+        }
+        .palette-item:hover,
+        .palette-item.selected {
+            background: var(--focus);
+            color: white;
+        }
+        .palette-item.selected .badge {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .palette-item.selected .palette-hint {
+            color: rgba(255,255,255,0.7);
+        }
+        .palette-name {
+            font-weight: 600;
+        }
+        .palette-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .palette-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .palette-empty {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Help modal */
+        .help-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        .help-modal.visible {
+            display: flex;
+        }
+        .help-modal-content {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .help-modal h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+        .help-group {
+            margin-bottom: 1.5rem;
+        }
+        .help-group h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+        }
+        .help-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+        }
+        .help-row kbd {
+            min-width: 2rem;
+            text-align: center;
+        }
+
+        /* Add padding at bottom for status bar */
+        .main {
+            padding-bottom: 4rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="layout">
+        <aside class="sidebar" role="navigation" aria-label="Workstreams">
+            <div class="sidebar-header">
+                <h1>{{.Project}}</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <h2 class="nav-heading">Workstreams</h2>
+                {{if .Workstreams}}
+                <ul class="nav-list" role="list">
+                    {{range .Workstreams}}
+                    <li class="nav-item">
+                        <a href="/workstream/{{.Name}}" class="nav-link">
+                            <span class="nav-link-name">
+                                {{.Name}}
+                                {{if .NeedsHelp}}<span class="help-flag" aria-label="Needs help">!</span>{{end}}
+                            </span>
+                            <span class="badge badge-{{.State}}">{{.State}}</span>
+                        </a>
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <p class="empty">No workstreams yet</p>
+                {{end}}
+            </nav>
+        </aside>
+
+        <main class="main" id="main-content">
+            <header class="page-header">
+                <h2>Activity Feed</h2>
+            </header>
+
+            <div class="insights" role="region" aria-label="Status overview">
+                <article class="insight-card {{if .NeedsHelp}}alert{{end}}">
+                    <h3 class="insight-label">Needs Help</h3>
+                    <p class="insight-count">{{len .NeedsHelp}}</p>
+                    {{if .NeedsHelp}}
+                    <ul class="insight-list">
+                        {{range .NeedsHelp}}
+                        <li><a href="/workstream/{{.Name}}">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </article>
+
+                <article class="insight-card {{if .Blocked}}warning{{end}}">
+                    <h3 class="insight-label">Blocked</h3>
+                    <p class="insight-count">{{len .Blocked}}</p>
+                    {{if .Blocked}}
+                    <ul class="insight-list">
+                        {{range .Blocked}}
+                        <li><a href="/workstream/{{.Name}}">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </article>
+
+                <article class="insight-card">
+                    <h3 class="insight-label">In Progress</h3>
+                    <p class="insight-count">{{len .InProgress}}</p>
+                    {{if .InProgress}}
+                    <ul class="insight-list">
+                        {{range .InProgress}}
+                        <li><a href="/workstream/{{.Name}}">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </article>
+            </div>
+
+            <section class="section" aria-labelledby="activity-heading">
+                <header class="section-header">
+                    <h3 class="section-title" id="activity-heading">Recent Activity</h3>
+                </header>
+                <div class="section-content" id="activity-feed">
+                    {{if .Activity}}
+                    {{range $i, $entry := .Activity}}
+                    <article class="activity-item{{if eq $i 0}} selected{{end}}" data-index="{{$i}}" data-workstream="{{$entry.WorkstreamName}}" tabindex="-1">
+                        <header class="activity-header">
+                            <a href="/workstream/{{$entry.WorkstreamName}}" class="activity-workstream">{{$entry.WorkstreamName}}</a>
+                            <time class="activity-time" datetime="{{$entry.Timestamp.Format "2006-01-02T15:04:05Z"}}">{{$entry.Timestamp.Format "Jan 2, 15:04"}}</time>
+                        </header>
+                        <p class="activity-content">{{$entry.Content}}</p>
+                    </article>
+                    {{end}}
+                    {{else}}
+                    <p class="empty">No activity recorded yet. Workstream log entries will appear here.</p>
+                    {{end}}
+                </div>
+            </section>
+
+            <div class="insights" role="region" aria-label="Status overview">
+                <article class="insight-card {{if .NeedsHelp}}alert{{end}}">
+                    <h3 class="insight-label">Needs Help</h3>
+                    <p class="insight-count">{{len .NeedsHelp}}</p>
+                    {{if .NeedsHelp}}
+                    <ul class="insight-list">
+                        {{range .NeedsHelp}}
+                        <li><a href="/workstream/{{.Name}}">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </article>
+
+                <article class="insight-card {{if .Blocked}}warning{{end}}">
+                    <h3 class="insight-label">Blocked</h3>
+                    <p class="insight-count">{{len .Blocked}}</p>
+                    {{if .Blocked}}
+                    <ul class="insight-list">
+                        {{range .Blocked}}
+                        <li><a href="/workstream/{{.Name}}">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </article>
+
+                <article class="insight-card">
+                    <h3 class="insight-label">In Progress</h3>
+                    <p class="insight-count">{{len .InProgress}}</p>
+                    {{if .InProgress}}
+                    <ul class="insight-list">
+                        {{range .InProgress}}
+                        <li><a href="/workstream/{{.Name}}">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{end}}
+                </article>
+            </div>
+        </main>
+    </div>
+
+    <!-- Command palette -->
+    <div class="palette" id="palette" role="dialog" aria-label="Jump to workstream">
+        <div class="palette-content">
+            <input type="text" class="palette-input" id="palette-input" placeholder="Jump to workstream..." autocomplete="off">
+            <div class="palette-results" id="palette-results"></div>
+        </div>
+    </div>
+
+    <!-- Status bar -->
+    <footer class="status-bar" role="status">
+        <div class="status-shortcuts">
+            <span class="status-shortcut"><kbd>,</kbd><kbd>.</kbd> Navigate</span>
+            <span class="status-shortcut"><kbd>Enter</kbd> Open</span>
+            <span class="status-shortcut"><kbd>/</kbd> Jump</span>
+            <span class="status-shortcut"><kbd>?</kbd> Help</span>
+        </div>
+        <div class="status-info">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>Live · {{len .Workstreams}} workstream{{if ne (len .Workstreams) 1}}s{{end}}</span>
+        </div>
+    </footer>
+
+    <!-- Help modal -->
+    <div class="help-modal" id="help-modal" role="dialog" aria-labelledby="help-modal-title" aria-modal="true">
+        <div class="help-modal-content">
+            <h2 id="help-modal-title">Keyboard Shortcuts</h2>
+            <div class="help-group">
+                <h3>Feed Navigation</h3>
+                <div class="help-row"><span>Move down</span><kbd>.</kbd></div>
+                <div class="help-row"><span>Move up</span><kbd>,</kbd></div>
+                <div class="help-row"><span>Open selected workstream</span><kbd>Enter</kbd></div>
+            </div>
+            <div class="help-group">
+                <h3>Quick Jump</h3>
+                <div class="help-row"><span>Open jump palette</span><kbd>/</kbd></div>
+                <div class="help-row"><span>Go home (dashboard)</span><kbd>g</kbd> <kbd>h</kbd></div>
+            </div>
+            <div class="help-group">
+                <h3>General</h3>
+                <div class="help-row"><span>Refresh now</span><kbd>r</kbd></div>
+                <div class="help-row"><span>Toggle this help</span><kbd>?</kbd></div>
+            </div>
+            <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.875rem;">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</p>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let selectedIndex = 0;
+        let pendingG = false;
+        let paletteSelectedIndex = 0;
+        let filteredWorkstreams = [];
+
+        // Workstream data from server
+        const workstreams = [
+            {{range .Workstreams}}
+            { name: "{{.Name}}", state: "{{.State}}", needsHelp: {{.NeedsHelp}} },
+            {{end}}
+        ];
+
+        // Get all activity items
+        function getActivityItems() {
+            return Array.from(document.querySelectorAll('.activity-item[data-index]'));
+        }
+
+        // Update selection
+        function selectItem(index) {
+            const items = getActivityItems();
+            if (items.length === 0) return;
+
+            // Clamp index
+            index = Math.max(0, Math.min(index, items.length - 1));
+            selectedIndex = index;
+
+            // Update visual selection
+            items.forEach((item, i) => {
+                item.classList.toggle('selected', i === index);
+            });
+
+            // Scroll into view
+            items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+
+        // Navigate to selected workstream
+        function openSelected() {
+            const items = getActivityItems();
+            if (items.length === 0) return;
+
+            const selected = items[selectedIndex];
+            const workstream = selected?.dataset.workstream;
+            if (workstream) {
+                window.location.href = '/workstream/' + workstream;
+            }
+        }
+
+        // Toggle help modal
+        function toggleHelp() {
+            const modal = document.getElementById('help-modal');
+            modal.classList.toggle('visible');
+        }
+
+        // Command palette functions
+        function openPalette() {
+            const palette = document.getElementById('palette');
+            const input = document.getElementById('palette-input');
+            palette.classList.add('visible');
+            input.value = '';
+            input.focus();
+            filterWorkstreams('');
+        }
+
+        function closePalette() {
+            const palette = document.getElementById('palette');
+            palette.classList.remove('visible');
+        }
+
+        function filterWorkstreams(query) {
+            const q = query.toLowerCase();
+            filteredWorkstreams = workstreams.filter(ws =>
+                ws.name.toLowerCase().includes(q)
+            );
+            paletteSelectedIndex = 0;
+            renderPaletteResults();
+        }
+
+        function renderPaletteResults() {
+            const container = document.getElementById('palette-results');
+            if (filteredWorkstreams.length === 0) {
+                container.innerHTML = '<div class="palette-empty">No matching workstreams</div>';
+                return;
+            }
+            container.innerHTML = filteredWorkstreams.map((ws, i) => `
+                <div class="palette-item${i === paletteSelectedIndex ? ' selected' : ''}" data-name="${ws.name}">
+                    <span class="palette-name">${ws.name}${ws.needsHelp ? ' <span class="help-flag">!</span>' : ''}</span>
+                    <span class="badge badge-${ws.state}">${ws.state}</span>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            container.querySelectorAll('.palette-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    window.location.href = '/workstream/' + item.dataset.name;
+                });
+            });
+        }
+
+        function selectPaletteItem(index) {
+            if (filteredWorkstreams.length === 0) return;
+            paletteSelectedIndex = Math.max(0, Math.min(index, filteredWorkstreams.length - 1));
+            renderPaletteResults();
+        }
+
+        function openPaletteSelected() {
+            if (filteredWorkstreams.length === 0) return;
+            const ws = filteredWorkstreams[paletteSelectedIndex];
+            if (ws) {
+                window.location.href = '/workstream/' + ws.name;
+            }
+        }
+
+        // Palette input handler
+        document.getElementById('palette-input').addEventListener('input', (e) => {
+            filterWorkstreams(e.target.value);
+        });
+
+        document.getElementById('palette-input').addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowDown':
+                case '.':
+                    selectPaletteItem(paletteSelectedIndex + 1);
+                    e.preventDefault();
+                    break;
+                case 'ArrowUp':
+                case ',':
+                    selectPaletteItem(paletteSelectedIndex - 1);
+                    e.preventDefault();
+                    break;
+                case 'Enter':
+                    openPaletteSelected();
+                    e.preventDefault();
+                    break;
+                case 'Escape':
+                    closePalette();
+                    e.preventDefault();
+                    break;
+            }
+        });
+
+        // Close palette on outside click
+        document.getElementById('palette').addEventListener('click', (e) => {
+            if (e.target.id === 'palette') {
+                closePalette();
+            }
+        });
+
+        // Keyboard handler
+        document.addEventListener('keydown', (e) => {
+            // Palette is open - handled by input
+            if (document.getElementById('palette').classList.contains('visible')) {
+                return;
+            }
+
+            // Ignore if typing in other inputs
+            if (e.target.matches('input, textarea')) return;
+
+            // Handle pending g command
+            if (pendingG) {
+                pendingG = false;
+                if (e.key === 'h') {
+                    window.location.href = '/';
+                    return;
+                }
+            }
+
+            // Help modal open - only allow ? and Esc to close
+            const helpModal = document.getElementById('help-modal');
+            if (helpModal.classList.contains('visible')) {
+                if (e.key === '?' || e.key === 'Escape') {
+                    toggleHelp();
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            switch (e.key) {
+                case '.':
+                    selectItem(selectedIndex + 1);
+                    e.preventDefault();
+                    break;
+                case ',':
+                    selectItem(selectedIndex - 1);
+                    e.preventDefault();
+                    break;
+                case 'Enter':
+                    openSelected();
+                    e.preventDefault();
+                    break;
+                case 'g':
+                    pendingG = true;
+                    setTimeout(() => { pendingG = false; }, 1000);
+                    break;
+                case 'r':
+                    refresh();
+                    e.preventDefault();
+                    break;
+                case '?':
+                    toggleHelp();
+                    e.preventDefault();
+                    break;
+                case '/':
+                    openPalette();
+                    e.preventDefault();
+                    break;
+            }
+        });
+
+        // Refresh function
+        async function refresh() {
+            try {
+                const response = await fetch(window.location.href);
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // Update activity feed
+                const newFeed = doc.getElementById('activity-feed');
+                const oldFeed = document.getElementById('activity-feed');
+                if (newFeed && oldFeed) {
+                    oldFeed.innerHTML = newFeed.innerHTML;
+                }
+
+                // Update insights
+                const newInsights = doc.querySelector('.insights');
+                const oldInsights = document.querySelector('.insights');
+                if (newInsights && oldInsights) {
+                    oldInsights.innerHTML = newInsights.innerHTML;
+                }
+
+                // Update sidebar
+                const newNav = doc.querySelector('.sidebar-nav');
+                const oldNav = document.querySelector('.sidebar-nav');
+                if (newNav && oldNav) {
+                    oldNav.innerHTML = newNav.innerHTML;
+                }
+
+                // Restore selection
+                selectItem(selectedIndex);
+            } catch (e) {
+                console.error('Refresh failed:', e);
+            }
+        }
+
+        // Live refresh every 5 seconds
+        setInterval(refresh, 5000);
+
+        // Initialize selection
+        selectItem(0);
+    </script>
+</body>
+</html>

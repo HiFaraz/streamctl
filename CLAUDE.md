@@ -10,7 +10,10 @@ make test                     # Run tests
 ./streamctl init              # Initialize database
 ./streamctl serve             # Start MCP server
 ./streamctl tui               # Launch TUI dashboard
+./streamctl web               # Start web UI (auto-detects project)
 ./streamctl list              # List workstreams (JSON)
+./streamctl export PROJECT/NAME          # Export single workstream to stdout
+./streamctl export PROJECT --dir ./dir/  # Export all to directory
 ```
 
 ## Architecture
@@ -24,7 +27,8 @@ streamctl/                    # This repo
 ├── internal/
 │   ├── store/                # SQLite storage
 │   ├── mcp/                  # MCP server implementation
-│   └── tui/                  # Terminal UI (bubbletea)
+│   ├── tui/                  # Terminal UI (bubbletea)
+│   └── web/                  # Web UI (HTML server)
 └── pkg/
     └── workstream/           # Core types and rendering
 ```
@@ -32,7 +36,7 @@ streamctl/                    # This repo
 ## Database Schema
 
 ```sql
-workstreams (id, project, name, state, owner, objective, key_context, decisions, last_update, created_at)
+workstreams (id, project, name, state, owner, objective, key_context, decisions, needs_help, last_update, created_at)
 plan_items (id, workstream_id, position, text, complete, status, notes)
 log_entries (id, workstream_id, timestamp, content)
 workstream_dependencies (blocker_id, blocked_id, created_at)
@@ -48,6 +52,7 @@ workstream_dependencies (blocker_id, blocked_id, created_at)
 | `workstream_update` | Update state, log, tasks, dependencies (see below) |
 | `workstream_claim` | Set ownership of a workstream |
 | `workstream_release` | Release ownership |
+| `web_serve` | Start web UI server, returns URL with floating port |
 
 ### workstream_update Parameters
 
@@ -63,6 +68,7 @@ workstream_dependencies (blocker_id, blocked_id, created_at)
 | `task_notes` | object | Set task notes (markdown): `{"position": 0, "notes": "..."}` |
 | `add_blocker` | string | Add dependency: `project/name` blocks this workstream |
 | `remove_blocker` | string | Remove dependency |
+| `needs_help` | boolean | Flag workstream as needing help/at-risk |
 
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
 **Task notes:** Supports markdown (code blocks, lists, links, headers)
@@ -94,3 +100,51 @@ Add to `~/.claude/settings.json`:
   }
 }
 ```
+
+## Web UI
+
+When the user asks to see workstreams in the browser, use `web_serve`:
+
+```
+web_serve(project="myproject")
+```
+
+This starts an HTTP server on a random available port and returns the URL. Tell the user the URL so they can open it in their browser. The server runs in the background and persists for the session.
+
+### Keyboard Navigation
+
+The web UI is keyboard-native:
+- `.` / `,` - Navigate activity feed (down/up)
+- `Enter` - Open selected workstream
+- `/` - Open command palette (fuzzy search)
+- `Backspace` - Return to dashboard
+- `g h` - Go home
+- `?` - Toggle help modal
+- `r` - Refresh
+
+## Exporting Workstreams
+
+Export workstreams to markdown files for version control:
+
+```bash
+# Single workstream to stdout
+streamctl export fleetadm/auth
+
+# All workstreams for a project to a directory
+streamctl export fleetadm --dir ./workstreams/
+```
+
+Exported files include a header marking them as generated. Use in pre-commit hooks:
+
+```bash
+#!/bin/bash
+streamctl export myproject --dir ./workstreams/
+git add workstreams/*.md
+```
+
+## needs_help vs blocked
+
+- **blocked** = structural dependency, can't proceed until another workstream completes
+- **needs_help** = signal for attention, workstream is stuck and needs human intervention
+
+A workstream can be both. Use `needs_help=true` when repeatedly hitting issues.

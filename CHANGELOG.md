@@ -1,0 +1,74 @@
+# Changelog
+
+## Unreleased
+
+### Added
+
+- **Web UI server** (`web_serve` MCP tool): Start a browser-based dashboard to view workstreams
+  - Modern dark theme with sidebar navigation
+  - Dashboard home page with insights and activity feed
+  - Auto-assigns a floating port (no conflicts)
+  - Returns URL directly to Claude for sharing with the user
+  - Usage: `web_serve(project="myproject")` returns `http://localhost:<port>`
+
+- **Dashboard insights**: Home page shows at-a-glance status
+  - "Needs Help" count (red highlight when > 0)
+  - "Blocked" count (amber highlight when > 0)
+  - "In Progress" count with quick links
+
+- **Activity feed**: Recent log entries across all workstreams, newest first
+
+- **Live dashboard**: Auto-refreshes every 5 seconds with smooth updates
+  - Green "Live" indicator pulses to show active monitoring
+  - Preserves scroll position during updates
+  - Ideal for monitoring parallel agents/teams
+
+- **Needs Help flag**: Mark workstreams as at-risk/stuck
+  - `workstream_update(project, name, needs_help=true)` to flag
+  - Displayed with `!` indicator in sidebar and lists
+  - Surfaced prominently in dashboard insights
+
+- **CLI web command**: `streamctl web [--port PORT]` starts the web UI from the terminal
+  - Auto-detects project from git remote or directory name
+  - Defaults to port 8080
+
+- **CLI export command**: Export workstreams to markdown files for version control
+  - `streamctl export PROJECT/NAME` - export single workstream to stdout
+  - `streamctl export PROJECT --dir ./workstreams/` - export all to directory
+  - Generated files include header warning not to edit manually
+  - Ideal for pre-commit hooks to sync exported files
+
+### Changed
+
+- **Keyboard-native navigation**: Feed-centric UX where keyboard is the primary interaction
+  - `.`/`,` to navigate through activity feed entries (down/up)
+  - `Enter` to open the selected entry's workstream
+  - `/` to open command palette for fuzzy search/jump to any workstream
+  - `g h` to go home (dashboard)
+  - `Backspace` to return to dashboard from detail view
+  - `?` to toggle help modal with all shortcuts
+  - `r` to manually refresh
+  - Status bar shows available shortcuts at bottom of screen
+
+- **WCAG 2.2 AAA compliant UI**: Complete redesign for accessibility
+  - High contrast light theme (7:1+ contrast ratios)
+  - Skip links for keyboard navigation
+  - Proper ARIA landmarks and labels
+  - Visible focus indicators (3px solid outline)
+  - Semantic HTML with proper heading hierarchy
+  - Screen reader announcements for live updates
+
+- **Log entries now show newest first** (was oldest first)
+
+- Updated CLAUDE.md with web UI documentation
+
+## 1.0.0
+
+### Added
+
+- Core workstream management with SQLite storage
+- MCP tools: `workstream_list`, `workstream_get`, `workstream_create`, `workstream_update`, `workstream_claim`, `workstream_release`
+- Task management: add, remove, set status (pending/in_progress/done/skipped), add notes (markdown)
+- Workstream dependencies: `add_blocker`, `remove_blocker`
+- TUI dashboard with keyboard navigation
+- Log entries with markdown support

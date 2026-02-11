@@ -23,6 +23,7 @@ type WorkstreamUpdate struct {
 	Owner     *string
 	LogEntry  *string // Append to log
 	PlanIndex *int    // Toggle plan item completion
+	NeedsHelp *bool   // Flag for at-risk/stuck workstreams
 }
 
 // Store provides SQLite-backed CRUD operations for workstreams
@@ -61,6 +62,7 @@ func (s *Store) migrate() error {
 		name TEXT NOT NULL,
 		state TEXT NOT NULL DEFAULT 'pending',
 		owner TEXT DEFAULT '',
+		needs_help BOOLEAN DEFAULT FALSE,
 		objective TEXT DEFAULT '',
 		key_context TEXT DEFAULT '',
 		decisions TEXT DEFAULT '',
@@ -120,6 +122,13 @@ func (s *Store) migrate() error {
 	// Migration: Add notes column to plan_items if missing
 	if !s.columnExists("plan_items", "notes") {
 		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN notes TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	// Migration: Add needs_help column to workstreams if missing
+	if !s.columnExists("workstreams", "needs_help") {
+		if _, err := s.db.Exec(`ALTER TABLE workstreams ADD COLUMN needs_help BOOLEAN DEFAULT FALSE`); err != nil {
 			return err
 		}
 	}
@@ -214,10 +223,10 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 	var wsID int64
 
 	err := s.db.QueryRow(`
-		SELECT id, project, name, state, owner, objective, key_context, decisions, last_update
+		SELECT id, project, name, state, owner, needs_help, objective, key_context, decisions, last_update
 		FROM workstreams WHERE project = ? AND name = ?`,
 		project, name,
-	).Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.Objective, &ws.KeyContext, &ws.Decisions, &ws.LastUpdate)
+	).Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.KeyContext, &ws.Decisions, &ws.LastUpdate)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +253,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 	// Load log entries
 	logRows, err := s.db.Query(`
 		SELECT timestamp, content FROM log_entries
-		WHERE workstream_id = ? ORDER BY timestamp`,
+		WHERE workstream_id = ? ORDER BY timestamp DESC`,
 		wsID,
 	)
 	if err != nil {
@@ -324,7 +333,7 @@ func (s *Store) ListProjects() ([]string, error) {
 
 // List returns workstreams matching the filter
 func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
-	query := `SELECT id, project, name, state, owner, objective, key_context, decisions, last_update FROM workstreams WHERE 1=1`
+	query := `SELECT id, project, name, state, owner, needs_help, objective, key_context, decisions, last_update FROM workstreams WHERE 1=1`
 	var args []any
 
 	if filter.Project != "" {
@@ -352,7 +361,7 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 	for rows.Next() {
 		var ws workstream.Workstream
 		var wsID int64
-		if err := rows.Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.Objective, &ws.KeyContext, &ws.Decisions, &ws.LastUpdate); err != nil {
+		if err := rows.Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.KeyContext, &ws.Decisions, &ws.LastUpdate); err != nil {
 			return nil, err
 		}
 
@@ -369,7 +378,7 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 		planRows.Close()
 
 		// Load log entries
-		logRows, err := s.db.Query(`SELECT timestamp, content FROM log_entries WHERE workstream_id = ? ORDER BY timestamp`, wsID)
+		logRows, err := s.db.Query(`SELECT timestamp, content FROM log_entries WHERE workstream_id = ? ORDER BY timestamp DESC`, wsID)
 		if err != nil {
 			return nil, err
 		}
@@ -414,6 +423,15 @@ func (s *Store) Update(project, name string, updates WorkstreamUpdate) error {
 	if updates.Owner != nil {
 		_, err := tx.Exec(`UPDATE workstreams SET owner = ?, last_update = ? WHERE id = ?`,
 			*updates.Owner, time.Now().UTC(), wsID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update needs_help flag
+	if updates.NeedsHelp != nil {
+		_, err := tx.Exec(`UPDATE workstreams SET needs_help = ?, last_update = ? WHERE id = ?`,
+			*updates.NeedsHelp, time.Now().UTC(), wsID)
 		if err != nil {
 			return err
 		}
@@ -601,4 +619,31 @@ func (s *Store) Delete(project, name string) error {
 		return fmt.Errorf("workstream not found: %s/%s", project, name)
 	}
 	return nil
+}
+
+// RecentActivity returns recent log entries across all workstreams for a project
+func (s *Store) RecentActivity(project string, limit int) ([]workstream.ActivityEntry, error) {
+	rows, err := s.db.Query(`
+		SELECT w.name, w.project, l.timestamp, l.content
+		FROM log_entries l
+		JOIN workstreams w ON l.workstream_id = w.id
+		WHERE w.project = ?
+		ORDER BY l.timestamp DESC
+		LIMIT ?`,
+		project, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []workstream.ActivityEntry
+	for rows.Next() {
+		var entry workstream.ActivityEntry
+		if err := rows.Scan(&entry.WorkstreamName, &entry.WorkstreamProject, &entry.Timestamp, &entry.Content); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }

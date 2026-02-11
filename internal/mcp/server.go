@@ -3,9 +3,13 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/faraz/streamctl/internal/store"
+	"github.com/faraz/streamctl/internal/web"
 	"github.com/faraz/streamctl/pkg/workstream"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -66,6 +70,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithObject("task_notes", mcp.Description("Set task notes (markdown): {\"position\": 0, \"notes\": \"## Details\\n- item\"}")),
 			mcp.WithString("add_blocker", mcp.Description("Add dependency: 'project/workstream' blocks this one")),
 			mcp.WithString("remove_blocker", mcp.Description("Remove dependency from this workstream")),
+			mcp.WithBoolean("needs_help", mcp.Description("Flag workstream as needing help/at-risk")),
 		),
 		h.HandleUpdate,
 	)
@@ -87,6 +92,14 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithString("name", mcp.Description("Workstream name"), mcp.Required()),
 		),
 		h.HandleRelease,
+	)
+
+	s.AddTool(
+		mcp.NewTool("web_serve",
+			mcp.WithDescription("Start a web UI server for viewing workstreams. Returns the URL."),
+			mcp.WithString("project", mcp.Description("Project name to display"), mcp.Required()),
+		),
+		h.HandleWebServe,
 	)
 }
 
@@ -273,6 +286,14 @@ func (h *Handlers) HandleUpdate(ctx context.Context, req mcp.CallToolRequest) (*
 		}
 	}
 
+	// Handle needs_help flag
+	if args != nil {
+		if needsHelpVal, ok := args["needs_help"]; ok {
+			needsHelp := needsHelpVal.(bool)
+			updates.NeedsHelp = &needsHelp
+		}
+	}
+
 	if err := h.store.Update(project, name, updates); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -330,6 +351,33 @@ func (h *Handlers) HandleRelease(ctx context.Context, req mcp.CallToolRequest) (
 	}
 
 	return mcp.NewToolResultText("Released workstream: " + project + "/" + name), nil
+}
+
+// HandleWebServe starts a web UI server and returns the URL
+func (h *Handlers) HandleWebServe(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+
+	if project == "" {
+		return mcp.NewToolResultError("project is required"), nil
+	}
+
+	// Find an available port
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return mcp.NewToolResultError("failed to find available port: " + err.Error()), nil
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	url := fmt.Sprintf("http://localhost:%d", port)
+
+	// Create and start the web server
+	srv := web.NewServer(h.store, project)
+
+	go func() {
+		http.Serve(listener, srv)
+	}()
+
+	return mcp.NewToolResultText(fmt.Sprintf("Web UI started at %s for project '%s'", url, project)), nil
 }
 
 // NewServer creates a new MCP server with workstream tools

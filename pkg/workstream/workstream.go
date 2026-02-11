@@ -54,6 +54,7 @@ type Workstream struct {
 	State      State
 	LastUpdate time.Time
 	Owner      string // Optional
+	NeedsHelp  bool   // Flag indicating workstream is stuck/at-risk
 
 	// Content sections
 	Objective  string
@@ -65,4 +66,12 @@ type Workstream struct {
 	// Dependencies
 	BlockedBy []Dependency // Workstreams that block this one
 	Blocks    []Dependency // Workstreams this one blocks
+}
+
+// ActivityEntry represents a log entry with workstream context
+type ActivityEntry struct {
+	WorkstreamName    string
+	WorkstreamProject string
+	Timestamp         time.Time
+	Content           string
 }
