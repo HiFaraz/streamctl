@@ -237,3 +237,157 @@ func TestHandleRelease(t *testing.T) {
 		t.Errorf("Owner = %q, want empty", ws.Owner)
 	}
 }
+
+func TestHandleUpdateTaskAdd(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":  "testproject",
+				"name":     "Feature One",
+				"task_add": "New task added via MCP",
+			},
+		},
+	}
+	result, err := h.HandleUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleUpdate() returned error result")
+	}
+
+	// Verify task added
+	ws, _ := st.Get("testproject", "Feature One")
+	if len(ws.Plan) != 2 {
+		t.Fatalf("Plan length = %d, want 2", len(ws.Plan))
+	}
+	if ws.Plan[1].Text != "New task added via MCP" {
+		t.Errorf("Plan[1].Text = %q, want 'New task added via MCP'", ws.Plan[1].Text)
+	}
+}
+
+func TestHandleUpdateTaskRemove(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":     "testproject",
+				"name":        "Feature One",
+				"task_remove": float64(0), // JSON numbers come as float64
+			},
+		},
+	}
+	result, err := h.HandleUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleUpdate() returned error result")
+	}
+
+	// Verify task removed
+	ws, _ := st.Get("testproject", "Feature One")
+	if len(ws.Plan) != 0 {
+		t.Fatalf("Plan length = %d, want 0", len(ws.Plan))
+	}
+}
+
+func TestHandleUpdateTaskStatus(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+				"name":    "Feature One",
+				"task_status": map[string]any{
+					"position": float64(0),
+					"status":   "in_progress",
+				},
+			},
+		},
+	}
+	result, err := h.HandleUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleUpdate() returned error result")
+	}
+
+	// Verify status changed
+	ws, _ := st.Get("testproject", "Feature One")
+	if ws.Plan[0].Status != workstream.TaskInProgress {
+		t.Errorf("Status = %q, want in_progress", ws.Plan[0].Status)
+	}
+}
+
+func TestHandleUpdateAddBlocker(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	// Feature One blocks Feature Two
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":     "testproject",
+				"name":        "Feature Two",
+				"add_blocker": "testproject/Feature One",
+			},
+		},
+	}
+	result, err := h.HandleUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleUpdate() returned error result")
+	}
+
+	// Verify dependency added
+	ws, _ := st.Get("testproject", "Feature Two")
+	if len(ws.BlockedBy) != 1 {
+		t.Fatalf("BlockedBy length = %d, want 1", len(ws.BlockedBy))
+	}
+	if ws.BlockedBy[0].BlockerName != "Feature One" {
+		t.Errorf("BlockerName = %q, want 'Feature One'", ws.BlockedBy[0].BlockerName)
+	}
+}
+
+func TestHandleUpdateRemoveBlocker(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	// First add dependency
+	st.AddDependency("testproject", "Feature One", "testproject", "Feature Two")
+
+	// Then remove it
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":        "testproject",
+				"name":           "Feature Two",
+				"remove_blocker": "testproject/Feature One",
+			},
+		},
+	}
+	result, err := h.HandleUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleUpdate() returned error result")
+	}
+
+	// Verify dependency removed
+	ws, _ := st.Get("testproject", "Feature Two")
+	if len(ws.BlockedBy) != 0 {
+		t.Errorf("BlockedBy length = %d, want 0", len(ws.BlockedBy))
+	}
+}

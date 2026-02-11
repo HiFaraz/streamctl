@@ -31,6 +31,24 @@ func Render(ws *Workstream) string {
 	}
 	b.WriteString("\n")
 
+	// Dependencies (only if there are any)
+	if len(ws.BlockedBy) > 0 || len(ws.Blocks) > 0 {
+		b.WriteString("## Dependencies\n")
+		if len(ws.BlockedBy) > 0 {
+			b.WriteString("Blocked by:\n")
+			for _, dep := range ws.BlockedBy {
+				b.WriteString(fmt.Sprintf("- %s/%s\n", dep.BlockerProject, dep.BlockerName))
+			}
+		}
+		if len(ws.Blocks) > 0 {
+			b.WriteString("Blocks:\n")
+			for _, dep := range ws.Blocks {
+				b.WriteString(fmt.Sprintf("- %s/%s\n", dep.BlockedProject, dep.BlockedName))
+			}
+		}
+		b.WriteString("\n")
+	}
+
 	// Objective
 	b.WriteString("## Objective\n")
 	b.WriteString(ws.Objective)
@@ -48,8 +66,18 @@ func Render(ws *Workstream) string {
 	b.WriteString("## Plan\n")
 	for i, item := range ws.Plan {
 		marker := "[ ]"
-		if item.Complete {
+		switch item.Status {
+		case TaskInProgress:
+			marker = "[>]"
+		case TaskDone:
 			marker = "[x]"
+		case TaskSkipped:
+			marker = "[-]"
+		default:
+			// TaskPending or empty -> [ ]
+			if item.Complete {
+				marker = "[x]"
+			}
 		}
 		b.WriteString(fmt.Sprintf("%d. %s %s\n", i+1, marker, item.Text))
 	}

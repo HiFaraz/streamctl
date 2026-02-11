@@ -73,7 +73,8 @@ func (s *Store) migrate() error {
 		workstream_id INTEGER NOT NULL REFERENCES workstreams(id) ON DELETE CASCADE,
 		position INTEGER NOT NULL,
 		text TEXT NOT NULL,
-		complete BOOLEAN DEFAULT FALSE
+		complete BOOLEAN DEFAULT FALSE,
+		status TEXT NOT NULL DEFAULT 'pending'
 	);
 
 	CREATE TABLE IF NOT EXISTS log_entries (
@@ -83,11 +84,21 @@ func (s *Store) migrate() error {
 		content TEXT NOT NULL
 	);
 
+	CREATE TABLE IF NOT EXISTS workstream_dependencies (
+		blocker_id INTEGER NOT NULL REFERENCES workstreams(id) ON DELETE CASCADE,
+		blocked_id INTEGER NOT NULL REFERENCES workstreams(id) ON DELETE CASCADE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (blocker_id, blocked_id),
+		CHECK(blocker_id != blocked_id)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_workstreams_project ON workstreams(project);
 	CREATE INDEX IF NOT EXISTS idx_workstreams_state ON workstreams(state);
 	CREATE INDEX IF NOT EXISTS idx_workstreams_owner ON workstreams(owner);
 	CREATE INDEX IF NOT EXISTS idx_plan_items_workstream ON plan_items(workstream_id);
 	CREATE INDEX IF NOT EXISTS idx_log_entries_workstream ON log_entries(workstream_id);
+	CREATE INDEX IF NOT EXISTS idx_deps_blocker ON workstream_dependencies(blocker_id);
+	CREATE INDEX IF NOT EXISTS idx_deps_blocked ON workstream_dependencies(blocked_id);
 	`
 	_, err := s.db.Exec(schema)
 	return err
@@ -118,10 +129,18 @@ func (s *Store) Create(ws *workstream.Workstream) error {
 
 	// Insert plan items
 	for i, item := range ws.Plan {
+		status := item.Status
+		if status == "" {
+			if item.Complete {
+				status = workstream.TaskDone
+			} else {
+				status = workstream.TaskPending
+			}
+		}
 		_, err := tx.Exec(`
-			INSERT INTO plan_items (workstream_id, position, text, complete)
-			VALUES (?, ?, ?, ?)`,
-			wsID, i, item.Text, item.Complete,
+			INSERT INTO plan_items (workstream_id, position, text, complete, status)
+			VALUES (?, ?, ?, ?, ?)`,
+			wsID, i, item.Text, item.Complete, string(status),
 		)
 		if err != nil {
 			return err
@@ -159,7 +178,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 
 	// Load plan items
 	rows, err := s.db.Query(`
-		SELECT text, complete FROM plan_items
+		SELECT text, complete, status FROM plan_items
 		WHERE workstream_id = ? ORDER BY position`,
 		wsID,
 	)
@@ -170,7 +189,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 
 	for rows.Next() {
 		var item workstream.PlanItem
-		if err := rows.Scan(&item.Text, &item.Complete); err != nil {
+		if err := rows.Scan(&item.Text, &item.Complete, &item.Status); err != nil {
 			return nil, err
 		}
 		ws.Plan = append(ws.Plan, item)
@@ -193,6 +212,46 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 			return nil, err
 		}
 		ws.Log = append(ws.Log, entry)
+	}
+
+	// Load BlockedBy (workstreams that block this one)
+	blockedByRows, err := s.db.Query(`
+		SELECT w.project, w.name FROM workstream_dependencies d
+		JOIN workstreams w ON d.blocker_id = w.id
+		WHERE d.blocked_id = ?`, wsID)
+	if err != nil {
+		return nil, err
+	}
+	defer blockedByRows.Close()
+
+	for blockedByRows.Next() {
+		var dep workstream.Dependency
+		if err := blockedByRows.Scan(&dep.BlockerProject, &dep.BlockerName); err != nil {
+			return nil, err
+		}
+		dep.BlockedProject = ws.Project
+		dep.BlockedName = ws.Name
+		ws.BlockedBy = append(ws.BlockedBy, dep)
+	}
+
+	// Load Blocks (workstreams this one blocks)
+	blocksRows, err := s.db.Query(`
+		SELECT w.project, w.name FROM workstream_dependencies d
+		JOIN workstreams w ON d.blocked_id = w.id
+		WHERE d.blocker_id = ?`, wsID)
+	if err != nil {
+		return nil, err
+	}
+	defer blocksRows.Close()
+
+	for blocksRows.Next() {
+		var dep workstream.Dependency
+		if err := blocksRows.Scan(&dep.BlockedProject, &dep.BlockedName); err != nil {
+			return nil, err
+		}
+		dep.BlockerProject = ws.Project
+		dep.BlockerName = ws.Name
+		ws.Blocks = append(ws.Blocks, dep)
 	}
 
 	return ws, nil
@@ -252,13 +311,13 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 		}
 
 		// Load plan items
-		planRows, err := s.db.Query(`SELECT text, complete FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
+		planRows, err := s.db.Query(`SELECT text, complete, status FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
 		if err != nil {
 			return nil, err
 		}
 		for planRows.Next() {
 			var item workstream.PlanItem
-			planRows.Scan(&item.Text, &item.Complete)
+			planRows.Scan(&item.Text, &item.Complete, &item.Status)
 			ws.Plan = append(ws.Plan, item)
 		}
 		planRows.Close()
@@ -343,6 +402,128 @@ func (s *Store) Update(project, name string, updates WorkstreamUpdate) error {
 	}
 
 	return tx.Commit()
+}
+
+// AddTask adds a new task to a workstream
+func (s *Store) AddTask(project, name, text string) error {
+	var wsID int64
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, project, name).Scan(&wsID)
+	if err != nil {
+		return err
+	}
+
+	// Get next position
+	var maxPos sql.NullInt64
+	s.db.QueryRow(`SELECT MAX(position) FROM plan_items WHERE workstream_id = ?`, wsID).Scan(&maxPos)
+	nextPos := 0
+	if maxPos.Valid {
+		nextPos = int(maxPos.Int64) + 1
+	}
+
+	_, err = s.db.Exec(`
+		INSERT INTO plan_items (workstream_id, position, text, complete, status)
+		VALUES (?, ?, ?, FALSE, 'pending')`,
+		wsID, nextPos, text,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
+	return err
+}
+
+// RemoveTask removes a task at the given position and reorders remaining tasks
+func (s *Store) RemoveTask(project, name string, position int) error {
+	var wsID int64
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, project, name).Scan(&wsID)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete the task at position
+	_, err = tx.Exec(`DELETE FROM plan_items WHERE workstream_id = ? AND position = ?`, wsID, position)
+	if err != nil {
+		return err
+	}
+
+	// Reorder remaining tasks (decrement position for all tasks after the deleted one)
+	_, err = tx.Exec(`UPDATE plan_items SET position = position - 1 WHERE workstream_id = ? AND position > ?`, wsID, position)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// SetTaskStatus sets the status of a task at the given position
+func (s *Store) SetTaskStatus(project, name string, position int, status workstream.TaskStatus) error {
+	var wsID int64
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, project, name).Scan(&wsID)
+	if err != nil {
+		return err
+	}
+
+	// Update status and complete (complete = true when status is done)
+	complete := status == workstream.TaskDone
+	_, err = s.db.Exec(`
+		UPDATE plan_items SET status = ?, complete = ?
+		WHERE workstream_id = ? AND position = ?`,
+		string(status), complete, wsID, position,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
+	return err
+}
+
+// AddDependency creates a blocking relationship between two workstreams
+func (s *Store) AddDependency(blockerProject, blockerName, blockedProject, blockedName string) error {
+	var blockerID, blockedID int64
+
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, blockerProject, blockerName).Scan(&blockerID)
+	if err != nil {
+		return fmt.Errorf("blocker workstream not found: %s/%s", blockerProject, blockerName)
+	}
+
+	err = s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, blockedProject, blockedName).Scan(&blockedID)
+	if err != nil {
+		return fmt.Errorf("blocked workstream not found: %s/%s", blockedProject, blockedName)
+	}
+
+	_, err = s.db.Exec(`INSERT INTO workstream_dependencies (blocker_id, blocked_id) VALUES (?, ?)`, blockerID, blockedID)
+	return err
+}
+
+// RemoveDependency removes a blocking relationship between two workstreams
+func (s *Store) RemoveDependency(blockerProject, blockerName, blockedProject, blockedName string) error {
+	var blockerID, blockedID int64
+
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, blockerProject, blockerName).Scan(&blockerID)
+	if err != nil {
+		return err
+	}
+
+	err = s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, blockedProject, blockedName).Scan(&blockedID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`DELETE FROM workstream_dependencies WHERE blocker_id = ? AND blocked_id = ?`, blockerID, blockedID)
+	return err
 }
 
 // Delete removes a workstream

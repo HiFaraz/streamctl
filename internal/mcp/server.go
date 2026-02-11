@@ -60,6 +60,11 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithString("state", mcp.Description("New state: pending, in_progress, blocked, done")),
 			mcp.WithString("log_entry", mcp.Description("New log entry to append")),
 			mcp.WithNumber("plan_index", mcp.Description("Toggle completion of plan item at this index")),
+			mcp.WithString("task_add", mcp.Description("Add a new task with this text")),
+			mcp.WithNumber("task_remove", mcp.Description("Remove task at this position (0-indexed)")),
+			mcp.WithObject("task_status", mcp.Description("Set task status: {\"position\": 0, \"status\": \"done\"}")),
+			mcp.WithString("add_blocker", mcp.Description("Add dependency: 'project/workstream' blocks this one")),
+			mcp.WithString("remove_blocker", mcp.Description("Remove dependency from this workstream")),
 		),
 		h.HandleUpdate,
 	)
@@ -190,8 +195,10 @@ func (h *Handlers) HandleUpdate(ctx context.Context, req mcp.CallToolRequest) (*
 		updates.LogEntry = &logEntry
 	}
 
+	args, _ := req.Params.Arguments.(map[string]any)
+
 	// Check if plan_index was provided
-	if args, ok := req.Params.Arguments.(map[string]any); ok && args != nil {
+	if args != nil {
 		if _, ok := args["plan_index"]; ok {
 			idx := mcp.ParseInt(req, "plan_index", -1)
 			if idx >= 0 {
@@ -200,11 +207,75 @@ func (h *Handlers) HandleUpdate(ctx context.Context, req mcp.CallToolRequest) (*
 		}
 	}
 
+	// Handle task_add
+	if taskAdd := mcp.ParseString(req, "task_add", ""); taskAdd != "" {
+		if err := h.store.AddTask(project, name, taskAdd); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
+
+	// Handle task_remove
+	if args != nil {
+		if _, ok := args["task_remove"]; ok {
+			idx := mcp.ParseInt(req, "task_remove", -1)
+			if idx >= 0 {
+				if err := h.store.RemoveTask(project, name, idx); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+			}
+		}
+	}
+
+	// Handle task_status
+	if args != nil {
+		if statusObj, ok := args["task_status"].(map[string]any); ok {
+			position := int(statusObj["position"].(float64))
+			status := workstream.TaskStatus(statusObj["status"].(string))
+			if err := h.store.SetTaskStatus(project, name, position, status); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+	}
+
+	// Handle add_blocker (format: "project/name")
+	if addBlocker := mcp.ParseString(req, "add_blocker", ""); addBlocker != "" {
+		parts := splitProjectName(addBlocker)
+		if len(parts) == 2 {
+			if err := h.store.AddDependency(parts[0], parts[1], project, name); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		} else {
+			return mcp.NewToolResultError("add_blocker must be in format 'project/name'"), nil
+		}
+	}
+
+	// Handle remove_blocker (format: "project/name")
+	if removeBlocker := mcp.ParseString(req, "remove_blocker", ""); removeBlocker != "" {
+		parts := splitProjectName(removeBlocker)
+		if len(parts) == 2 {
+			if err := h.store.RemoveDependency(parts[0], parts[1], project, name); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		} else {
+			return mcp.NewToolResultError("remove_blocker must be in format 'project/name'"), nil
+		}
+	}
+
 	if err := h.store.Update(project, name, updates); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	return mcp.NewToolResultText("Updated workstream: " + project + "/" + name), nil
+}
+
+// splitProjectName splits "project/name" into parts
+func splitProjectName(s string) []string {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' {
+			return []string{s[:i], s[i+1:]}
+		}
+	}
+	return []string{s}
 }
 
 // HandleClaim sets ownership of a workstream

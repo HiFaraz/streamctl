@@ -295,3 +295,224 @@ func TestDelete(t *testing.T) {
 		t.Errorf("Get() after Delete() should return error")
 	}
 }
+
+func TestSetTaskStatus(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{
+		Name:    "Status Test",
+		Project: "proj",
+		State:   workstream.StatePending,
+		Plan: []workstream.PlanItem{
+			{Text: "Task 0", Status: workstream.TaskPending},
+		},
+	})
+
+	// Set to in_progress
+	err := s.SetTaskStatus("proj", "Status Test", 0, workstream.TaskInProgress)
+	if err != nil {
+		t.Fatalf("SetTaskStatus() error = %v", err)
+	}
+
+	got, _ := s.Get("proj", "Status Test")
+	if got.Plan[0].Status != workstream.TaskInProgress {
+		t.Errorf("Status = %q, want in_progress", got.Plan[0].Status)
+	}
+
+	// Set to done
+	s.SetTaskStatus("proj", "Status Test", 0, workstream.TaskDone)
+	got, _ = s.Get("proj", "Status Test")
+	if got.Plan[0].Status != workstream.TaskDone {
+		t.Errorf("Status = %q, want done", got.Plan[0].Status)
+	}
+	// Complete should also be true when done
+	if !got.Plan[0].Complete {
+		t.Errorf("Complete = false, want true when status is done")
+	}
+}
+
+func TestRemoveTask(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{
+		Name:    "Remove Test",
+		Project: "proj",
+		State:   workstream.StatePending,
+		Plan: []workstream.PlanItem{
+			{Text: "Task 0", Status: workstream.TaskPending},
+			{Text: "Task 1", Status: workstream.TaskPending},
+			{Text: "Task 2", Status: workstream.TaskPending},
+		},
+	})
+
+	// Remove middle task
+	err := s.RemoveTask("proj", "Remove Test", 1)
+	if err != nil {
+		t.Fatalf("RemoveTask() error = %v", err)
+	}
+
+	got, _ := s.Get("proj", "Remove Test")
+	if len(got.Plan) != 2 {
+		t.Fatalf("Plan length = %d, want 2", len(got.Plan))
+	}
+	if got.Plan[0].Text != "Task 0" {
+		t.Errorf("Plan[0].Text = %q, want 'Task 0'", got.Plan[0].Text)
+	}
+	if got.Plan[1].Text != "Task 2" {
+		t.Errorf("Plan[1].Text = %q, want 'Task 2'", got.Plan[1].Text)
+	}
+}
+
+func TestAddTask(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{
+		Name:    "Task Test",
+		Project: "proj",
+		State:   workstream.StatePending,
+	})
+
+	err := s.AddTask("proj", "Task Test", "New task")
+	if err != nil {
+		t.Fatalf("AddTask() error = %v", err)
+	}
+
+	got, _ := s.Get("proj", "Task Test")
+	if len(got.Plan) != 1 {
+		t.Fatalf("Plan length = %d, want 1", len(got.Plan))
+	}
+	if got.Plan[0].Text != "New task" {
+		t.Errorf("Plan[0].Text = %q, want 'New task'", got.Plan[0].Text)
+	}
+	if got.Plan[0].Status != workstream.TaskPending {
+		t.Errorf("Plan[0].Status = %q, want pending", got.Plan[0].Status)
+	}
+
+	// Add another task
+	s.AddTask("proj", "Task Test", "Second task")
+	got, _ = s.Get("proj", "Task Test")
+	if len(got.Plan) != 2 {
+		t.Fatalf("Plan length = %d, want 2", len(got.Plan))
+	}
+	if got.Plan[1].Text != "Second task" {
+		t.Errorf("Plan[1].Text = %q, want 'Second task'", got.Plan[1].Text)
+	}
+}
+
+func TestRemoveDependency(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj", State: workstream.StatePending})
+	s.AddDependency("proj", "auth", "proj", "api")
+
+	// Remove dependency
+	err := s.RemoveDependency("proj", "auth", "proj", "api")
+	if err != nil {
+		t.Fatalf("RemoveDependency() error = %v", err)
+	}
+
+	// Verify api is no longer blocked
+	api, _ := s.Get("proj", "api")
+	if len(api.BlockedBy) != 0 {
+		t.Errorf("BlockedBy length = %d, want 0", len(api.BlockedBy))
+	}
+}
+
+func TestAddDependency(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create two workstreams
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj", State: workstream.StatePending})
+
+	// auth blocks api
+	err := s.AddDependency("proj", "auth", "proj", "api")
+	if err != nil {
+		t.Fatalf("AddDependency() error = %v", err)
+	}
+
+	// Verify api is blocked by auth
+	api, _ := s.Get("proj", "api")
+	if len(api.BlockedBy) != 1 {
+		t.Fatalf("BlockedBy length = %d, want 1", len(api.BlockedBy))
+	}
+	if api.BlockedBy[0].BlockerName != "auth" {
+		t.Errorf("BlockedBy[0].BlockerName = %q, want 'auth'", api.BlockedBy[0].BlockerName)
+	}
+
+	// Verify auth blocks api
+	auth, _ := s.Get("proj", "auth")
+	if len(auth.Blocks) != 1 {
+		t.Fatalf("Blocks length = %d, want 1", len(auth.Blocks))
+	}
+	if auth.Blocks[0].BlockedName != "api" {
+		t.Errorf("Blocks[0].BlockedName = %q, want 'api'", auth.Blocks[0].BlockedName)
+	}
+}
+
+func TestDependenciesTableExists(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// The table should exist after New() runs migrations
+	_, err := s.db.Exec("SELECT 1 FROM workstream_dependencies LIMIT 1")
+	if err != nil {
+		t.Errorf("workstream_dependencies table does not exist: %v", err)
+	}
+}
+
+func TestPlanItemStatus(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	ws := &workstream.Workstream{
+		Name:    "Status Test",
+		Project: "proj",
+		State:   workstream.StatePending,
+		Plan: []workstream.PlanItem{
+			{Text: "Task 1", Status: workstream.TaskPending},
+			{Text: "Task 2", Status: workstream.TaskInProgress},
+			{Text: "Task 3", Status: workstream.TaskDone},
+			{Text: "Task 4", Status: workstream.TaskSkipped},
+		},
+	}
+
+	err := s.Create(ws)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	got, err := s.Get("proj", "Status Test")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if len(got.Plan) != 4 {
+		t.Fatalf("Plan length = %d, want 4", len(got.Plan))
+	}
+	if got.Plan[0].Status != workstream.TaskPending {
+		t.Errorf("Plan[0].Status = %q, want pending", got.Plan[0].Status)
+	}
+	if got.Plan[1].Status != workstream.TaskInProgress {
+		t.Errorf("Plan[1].Status = %q, want in_progress", got.Plan[1].Status)
+	}
+	if got.Plan[2].Status != workstream.TaskDone {
+		t.Errorf("Plan[2].Status = %q, want done", got.Plan[2].Status)
+	}
+	if got.Plan[3].Status != workstream.TaskSkipped {
+		t.Errorf("Plan[3].Status = %q, want skipped", got.Plan[3].Status)
+	}
+}
