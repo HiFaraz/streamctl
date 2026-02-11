@@ -145,7 +145,7 @@ Restart Claude Code. Add `.streamctl/` to `.gitignore`.
 Paste this into Claude Code to set up streamctl:
 
 ```
-Read ~/streamctl/README.md, then:
+Clone https://github.com/HiFaraz/streamctl to ~/streamctl if not present, build it, then:
 
 1. Add streamctl MCP server to ~/.claude/settings.json if not already configured
 2. Add to ~/.claude/CLAUDE.md (create if needed) instructions to use workstreams:
