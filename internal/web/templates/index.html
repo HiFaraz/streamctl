@@ -117,15 +117,11 @@
             text-transform: uppercase;
         }
 
-        .badge-help {
-            background: #fee;
-            color: var(--red);
-        }
-
-        .badge-blocked {
-            background: #fef3c7;
-            color: var(--amber);
-        }
+        .badge-pending { background: var(--bg-secondary); color: var(--text-muted); }
+        .badge-in_progress { background: #dbeafe; color: var(--focus); }
+        .badge-blocked { background: #fef3c7; color: var(--amber); }
+        .badge-done { background: #dcfce7; color: var(--green); }
+        .badge-help { background: #fee; color: var(--red); }
 
         .blocked-by {
             font-size: 12px;
@@ -412,7 +408,7 @@
             container.innerHTML = filteredWorkstreams.map((ws, i) => `
                 <div class="palette-item${i === paletteSelectedIndex ? ' selected' : ''}" data-name="${ws.name}">
                     <span>${ws.name}${ws.needsHelp ? ' <span class="badge badge-help">!</span>' : ''}</span>
-                    <span class="badge">${ws.state}</span>
+                    <span class="badge badge-${ws.state}">${ws.state}</span>
                 </div>
             `).join('');
             container.querySelectorAll('.palette-item').forEach(item => {
