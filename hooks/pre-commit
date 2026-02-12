@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Run tests before commit
+echo "Running tests..."
+go test ./...
+
 # Rebuild binary before commit
 echo "Rebuilding streamctl binary..."
 make build
