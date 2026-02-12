@@ -756,8 +756,8 @@
         function renderLogs() {
             document.querySelectorAll('.feed-item[data-type="log"]').forEach(item => {
                 const timestamp = item.dataset.timestamp;
-                // Convert literal \n to actual newlines (in case stored with escaped newlines)
-                const content = (logContents[timestamp] || '').replace(/\\n/g, '\n');
+                // Go's {{js}} template escapes newlines as \u000A - convert to actual newlines
+                const content = (logContents[timestamp] || '').replace(/\\u000A/g, '\n').replace(/\\n/g, '\n');
                 const logContent = item.querySelector('.log-content');
                 const hint = item.querySelector('.expand-hint');
 
