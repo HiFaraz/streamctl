@@ -756,7 +756,8 @@
         function renderLogs() {
             document.querySelectorAll('.feed-item[data-type="log"]').forEach(item => {
                 const timestamp = item.dataset.timestamp;
-                const content = logContents[timestamp] || '';
+                // Convert literal \n to actual newlines (in case stored with escaped newlines)
+                const content = (logContents[timestamp] || '').replace(/\\n/g, '\n');
                 const logContent = item.querySelector('.log-content');
                 const hint = item.querySelector('.expand-hint');
 
