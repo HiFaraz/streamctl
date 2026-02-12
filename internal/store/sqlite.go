@@ -187,9 +187,9 @@ func (s *Store) Create(ws *workstream.Workstream) error {
 
 	// Insert workstream
 	result, err := tx.Exec(`
-		INSERT INTO workstreams (project, name, state, owner, objective, key_context, decisions, last_update)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		ws.Project, ws.Name, string(ws.State), ws.Owner, ws.Objective, ws.KeyContext, ws.Decisions, ws.LastUpdate,
+		INSERT INTO workstreams (project, name, state, owner, objective, last_update)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		ws.Project, ws.Name, string(ws.State), ws.Owner, ws.Objective, ws.LastUpdate,
 	)
 	if err != nil {
 		return err
@@ -241,10 +241,10 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 	var wsID int64
 
 	err := s.db.QueryRow(`
-		SELECT id, project, name, state, owner, needs_help, objective, key_context, decisions, last_update
+		SELECT id, project, name, state, owner, needs_help, objective, last_update
 		FROM workstreams WHERE project = ? AND name = ?`,
 		project, name,
-	).Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.KeyContext, &ws.Decisions, &ws.LastUpdate)
+	).Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.LastUpdate)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +351,7 @@ func (s *Store) ListProjects() ([]string, error) {
 
 // List returns workstreams matching the filter
 func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
-	query := `SELECT id, project, name, state, owner, needs_help, objective, key_context, decisions, last_update FROM workstreams WHERE 1=1`
+	query := `SELECT id, project, name, state, owner, needs_help, objective, last_update FROM workstreams WHERE 1=1`
 	var args []any
 
 	if filter.Project != "" {
@@ -379,7 +379,7 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 	for rows.Next() {
 		var ws workstream.Workstream
 		var wsID int64
-		if err := rows.Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.KeyContext, &ws.Decisions, &ws.LastUpdate); err != nil {
+		if err := rows.Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.LastUpdate); err != nil {
 			return nil, err
 		}
 
@@ -624,6 +624,20 @@ func (s *Store) SetTaskNotes(project, name string, position int, notes string) e
 
 	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
 	return err
+}
+
+// Rename renames a workstream
+func (s *Store) Rename(project, oldName, newName string) error {
+	result, err := s.db.Exec(`UPDATE workstreams SET name = ?, last_update = ? WHERE project = ? AND name = ?`,
+		newName, time.Now().UTC(), project, oldName)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("workstream not found: %s/%s", project, oldName)
+	}
+	return nil
 }
 
 // Delete removes a workstream

@@ -37,7 +37,7 @@ streamctl/                    # This repo
 ## Database Schema
 
 ```sql
-workstreams (id, project, name, state, owner, objective, key_context, decisions, needs_help, last_update, created_at)
+workstreams (id, project, name, state, owner, objective, needs_help, last_update, created_at)
 plan_items (id, workstream_id, position, text, complete, status, notes)
 log_entries (id, workstream_id, timestamp, content)
 workstream_dependencies (blocker_id, blocked_id, created_at)
@@ -67,6 +67,7 @@ milestone_requirements (milestone_id, workstream_id)
 |-----------|------|-------------|
 | `project` | string | Project name (required) |
 | `name` | string | Workstream name (required) |
+| `new_name` | string | Rename workstream to this name |
 | `state` | string | New state: pending, in_progress, blocked, done |
 | `log_entry` | string | Append log entry |
 | `task_add` | string | Add new task with this text |
@@ -136,13 +137,22 @@ This starts an HTTP server on a random available port and returns the URL. Tell 
 ### Keyboard Navigation
 
 The web UI is keyboard-native:
-- `.` / `,` - Navigate activity feed (down/up)
-- `Enter` - Open selected workstream
+
+**Dashboard (index):**
+- `↑` / `↓` or `,` / `.` - Navigate activity feed
+- `→` or `Enter` - Open selected workstream
 - `/` - Open command palette (fuzzy search)
-- `Backspace` - Return to dashboard
 - `g h` - Go home
 - `?` - Toggle help modal
 - `r` - Refresh
+
+**Workstream detail:**
+- `↑` / `↓` or `,` / `.` - Navigate tasks/logs
+- `→` - Expand collapsed log
+- `←` - Collapse log (or go back if not expandable)
+- `Backspace` - Return to dashboard
+- `/` - Open command palette
+- `?` - Toggle help modal
 
 ## Exporting Workstreams
 

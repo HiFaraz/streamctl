@@ -282,6 +282,34 @@ func TestUpdatePlanItem(t *testing.T) {
 	}
 }
 
+func TestRename(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "Old Name", Project: "proj", State: workstream.StatePending, Objective: "Test objective"})
+
+	err := s.Rename("proj", "Old Name", "New Name")
+	if err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+
+	// Should not find old name
+	_, err = s.Get("proj", "Old Name")
+	if err == nil {
+		t.Errorf("Get() old name should return error after rename")
+	}
+
+	// Should find new name
+	ws, err := s.Get("proj", "New Name")
+	if err != nil {
+		t.Fatalf("Get() new name error = %v", err)
+	}
+	if ws.Objective != "Test objective" {
+		t.Errorf("Objective = %q, want %q", ws.Objective, "Test objective")
+	}
+}
+
 func TestDelete(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	s, _ := New(dbPath)

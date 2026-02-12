@@ -369,7 +369,7 @@
     <footer class="status-bar">
         <div class="status-shortcuts">
             <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-            <span><kbd>Enter</kbd> open</span>
+            <span><kbd>→</kbd> open</span>
             <span><kbd>/</kbd> search/jump</span>
             <span><kbd>?</kbd> help</span>
         </div>
@@ -392,7 +392,7 @@
         <div class="help-content">
             <h2>Keyboard Shortcuts</h2>
             <div class="help-row"><span>Navigate feed</span><span><kbd>↑</kbd> <kbd>↓</kbd></span></div>
-            <div class="help-row"><span>Open workstream</span><span><kbd>Enter</kbd></span></div>
+            <div class="help-row"><span>Open workstream</span><span><kbd>→</kbd> <kbd>Enter</kbd></span></div>
             <div class="help-row"><span>Search / Jump</span><span><kbd>/</kbd></span></div>
             <div class="help-row"><span>Go home</span><span><kbd>g</kbd> <kbd>h</kbd></span></div>
             <div class="help-row"><span>Refresh</span><span><kbd>r</kbd></span></div>
@@ -596,7 +596,7 @@
             switch (e.key) {
                 case 'ArrowDown': case '.': selectItem(selectedIndex + 1); e.preventDefault(); break;
                 case 'ArrowUp': case ',': selectItem(selectedIndex - 1); e.preventDefault(); break;
-                case 'Enter': openSelected(); e.preventDefault(); break;
+                case 'Enter': case 'ArrowRight': openSelected(); e.preventDefault(); break;
                 case 'g': pendingG = true; setTimeout(() => pendingG = false, 1000); break;
                 case 'r': refresh(); e.preventDefault(); break;
                 case '?': toggleHelp(); e.preventDefault(); break;

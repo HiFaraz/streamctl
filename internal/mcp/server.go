@@ -51,7 +51,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithDescription("Create a new workstream from template"),
 			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
 			mcp.WithString("name", mcp.Description("Workstream name (without .md)"), mcp.Required()),
-			mcp.WithString("objective", mcp.Description("One-sentence objective"), mcp.Required()),
+			mcp.WithString("objective", mcp.Description("Objective and context for this workstream"), mcp.Required()),
 		),
 		h.HandleCreate,
 	)
@@ -61,6 +61,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithDescription("Update workstream fields"),
 			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
 			mcp.WithString("name", mcp.Description("Workstream name"), mcp.Required()),
+			mcp.WithString("new_name", mcp.Description("Rename workstream to this name")),
 			mcp.WithString("state", mcp.Description("New state: pending, in_progress, blocked, done")),
 			mcp.WithString("log_entry", mcp.Description("New log entry to append")),
 			mcp.WithNumber("plan_index", mcp.Description("Toggle completion of plan item at this index")),
@@ -236,6 +237,14 @@ func (h *Handlers) HandleUpdate(ctx context.Context, req mcp.CallToolRequest) (*
 
 	if project == "" || name == "" {
 		return mcp.NewToolResultError("project and name are required"), nil
+	}
+
+	// Handle rename first (if requested)
+	if newName := mcp.ParseString(req, "new_name", ""); newName != "" {
+		if err := h.store.Rename(project, name, newName); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		name = newName // Use new name for subsequent updates
 	}
 
 	var updates store.WorkstreamUpdate

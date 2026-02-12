@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Workstream.Name}} - {{.Project}}</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
             --text-primary: #1a1a1a;
@@ -182,6 +183,74 @@
             background: rgba(255,255,255,0.15);
         }
 
+        /* Collapsible logs */
+        .log-content {
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+        .log-content.collapsed {
+            max-height: 1.6em;
+            position: relative;
+        }
+        .log-content.collapsed::after {
+            content: '...';
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            padding-left: 4px;
+        }
+        .feed-item.selected .log-content.collapsed::after {
+            background: var(--focus);
+        }
+        .expand-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .feed-item.selected .expand-hint {
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* Markdown content styling */
+        .markdown-content {
+            line-height: 1.6;
+        }
+        .markdown-content p { margin: 0 0 0.5em 0; }
+        .markdown-content p:last-child { margin-bottom: 0; }
+        .markdown-content code {
+            background: var(--bg-secondary);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .markdown-content pre {
+            background: var(--bg-secondary);
+            padding: 8px 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+        }
+        .markdown-content ul, .markdown-content ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            margin: 0.5em 0 0.25em 0;
+            font-size: 1em;
+            font-weight: 600;
+        }
+        .feed-item.selected .markdown-content code {
+            background: rgba(255,255,255,0.15);
+        }
+        .feed-item.selected .markdown-content pre {
+            background: rgba(255,255,255,0.1);
+        }
+
         /* Info section */
         .info-bar {
             padding: 8px 16px;
@@ -230,6 +299,11 @@
             background: var(--bg-primary);
             border: 1px solid var(--border);
             border-radius: 3px;
+        }
+        .feed-item.selected kbd {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.3);
+            color: white;
         }
 
         /* Command palette */
@@ -420,7 +494,8 @@
                 <span>{{$log.Timestamp.Format "Jan 2 15:04"}}</span>
             </div>
             <div class="feed-body">
-                <div class="feed-content">{{$log.Content}}</div>
+                <div class="feed-content log-content markdown-content"></div>
+                <div class="expand-hint" style="display: none;"><kbd>Enter</kbd> to expand</div>
             </div>
         </article>
         {{end}}
@@ -434,8 +509,9 @@
     <footer class="status-bar">
         <div class="status-shortcuts">
             <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-            <span><kbd>Backspace</kbd> back</span>
-            <span><kbd>/</kbd> search/jump</span>
+            <span><kbd>→</kbd> expand</span>
+            <span><kbd>←</kbd> collapse/back</span>
+            <span><kbd>/</kbd> search</span>
             <span><kbd>?</kbd> help</span>
         </div>
     </footer>
@@ -453,6 +529,8 @@
         <div class="help-content">
             <h2>Keyboard Shortcuts</h2>
             <div class="help-row"><span>Navigate feed</span><span><kbd>↑</kbd> <kbd>↓</kbd></span></div>
+            <div class="help-row"><span>Expand log</span><span><kbd>→</kbd></span></div>
+            <div class="help-row"><span>Collapse / Back</span><span><kbd>←</kbd></span></div>
             <div class="help-row"><span>Back to dashboard</span><span><kbd>Backspace</kbd></span></div>
             <div class="help-row"><span>Search / Jump</span><span><kbd>/</kbd></span></div>
             <div class="help-row"><span>Go home</span><span><kbd>g</kbd> <kbd>h</kbd></span></div>
@@ -472,6 +550,13 @@
             { name: "{{.Name}}", state: "{{.State}}", needsHelp: {{.NeedsHelp}} },
             {{end}}
         ];
+
+        // Store log contents with proper newline preservation
+        const logContents = {
+            {{range .Workstream.Log}}
+            "{{.Timestamp.Unix}}": {{js .Content}},
+            {{end}}
+        };
 
         const paletteActions = [
             { id: 'search', icon: '⌕', label: 'Search all logs and tasks', hint: 'ws:name to filter' },
@@ -647,14 +732,85 @@
                 case 'ArrowDown': case '.': selectItem(selectedIndex + 1); e.preventDefault(); break;
                 case 'ArrowUp': case ',': selectItem(selectedIndex - 1); e.preventDefault(); break;
                 case 'Backspace': window.location.href = '/'; e.preventDefault(); break;
+                case 'ArrowLeft':
+                    // Try to collapse, if not possible go back
+                    const itemsLeft = getFeedItems();
+                    if (!collapseLog(itemsLeft[selectedIndex])) {
+                        window.location.href = '/';
+                    }
+                    e.preventDefault();
+                    break;
+                case 'ArrowRight':
+                    // Expand log if possible
+                    const itemsRight = getFeedItems();
+                    expandLog(itemsRight[selectedIndex]);
+                    e.preventDefault();
+                    break;
                 case 'g': pendingG = true; setTimeout(() => pendingG = false, 1000); break;
                 case '?': toggleHelp(); e.preventDefault(); break;
                 case '/': openPalette(); e.preventDefault(); break;
             }
         });
 
-        // On load: scroll to target log entry if hash present, or select first item
+        // Render markdown and setup collapsible logs
+        function renderLogs() {
+            document.querySelectorAll('.feed-item[data-type="log"]').forEach(item => {
+                const timestamp = item.dataset.timestamp;
+                const content = logContents[timestamp] || '';
+                const logContent = item.querySelector('.log-content');
+                const hint = item.querySelector('.expand-hint');
+
+                // Render markdown (with breaks enabled for newline handling)
+                if (typeof marked !== 'undefined') {
+                    marked.setOptions({ breaks: true, gfm: true });
+                    logContent.innerHTML = marked.parse(content);
+                } else {
+                    logContent.textContent = content;
+                }
+
+                // Check if content is long (more than 3 lines or 200 chars)
+                const isLong = content.split('\n').length > 3 || content.length > 200;
+                if (isLong) {
+                    logContent.classList.add('collapsed');
+                    hint.style.display = 'block';
+                    hint.innerHTML = '<kbd>→</kbd> to expand';
+                    item.dataset.expanded = 'false';
+                } else {
+                    item.dataset.expanded = 'true';
+                }
+            });
+        }
+
+        function expandLog(item) {
+            if (item.dataset.type !== 'log') return false;
+            if (item.dataset.expanded === 'true') return false;
+
+            const logContent = item.querySelector('.log-content');
+            const hint = item.querySelector('.expand-hint');
+            logContent.classList.remove('collapsed');
+            hint.style.display = 'block';
+            hint.innerHTML = '<kbd>←</kbd> to collapse';
+            item.dataset.expanded = 'true';
+            return true;
+        }
+
+        function collapseLog(item) {
+            if (item.dataset.type !== 'log') return false;
+            if (item.dataset.expanded !== 'true') return false;
+
+            const logContent = item.querySelector('.log-content');
+            const hint = item.querySelector('.expand-hint');
+            logContent.classList.add('collapsed');
+            hint.style.display = 'block';
+            hint.innerHTML = '<kbd>→</kbd> to expand';
+            item.dataset.expanded = 'false';
+            return true;
+        }
+
+        // On load: render logs, scroll to target if hash present, or select first item
         (function() {
+            renderLogs();
+
             const hash = window.location.hash;
             if (hash && hash.startsWith('#log-')) {
                 const target = document.getElementById(hash.slice(1));
@@ -663,6 +819,10 @@
                     const index = items.indexOf(target);
                     if (index >= 0) {
                         selectItem(index);
+                        // Auto-expand if navigating to a specific log
+                        if (target.dataset.expanded === 'false') {
+                            toggleExpand(target);
+                        }
                         return;
                     }
                 }

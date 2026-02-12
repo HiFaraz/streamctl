@@ -339,14 +339,6 @@ func (m Model) renderDetail() string {
 	s.WriteString(ws.Objective)
 	s.WriteString("\n\n")
 
-	// Key Context
-	if ws.KeyContext != "" {
-		s.WriteString(titleStyle.Render("Key Context"))
-		s.WriteString("\n")
-		s.WriteString(ws.KeyContext)
-		s.WriteString("\n\n")
-	}
-
 	// Plan
 	if len(ws.Plan) > 0 {
 		s.WriteString(titleStyle.Render("Plan"))

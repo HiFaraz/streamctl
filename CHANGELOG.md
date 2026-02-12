@@ -4,6 +4,28 @@
 
 ### Added
 
+- **Workstream renaming**: `workstream_update(project, name, new_name="...")` to rename a workstream
+
+- **Markdown rendering in web UI logs**: Log entries now render markdown properly with line breaks
+
+- **Collapsible logs in web UI**: Long logs (>3 lines or >200 chars) are collapsed by default
+  - `→` to expand, `←` to collapse
+  - Visual hint shows current state
+
+- **Arrow key navigation in web UI**:
+  - Dashboard: `→` or `Enter` opens selected item
+  - Detail page: `→` expands log, `←` collapses (or goes back if not expandable)
+
+### Removed
+
+- **Removed `key_context` and `decisions` fields**: These were unused legacy fields
+  - Use `objective` for context (description softened to allow longer content)
+  - Use log entries to record decisions with timestamps
+
+### Changed
+
+- **Objective field description**: Changed from "One-sentence objective" to "Objective and context for this workstream" to allow richer content at creation time
+
 - **Cross-workstream milestones**: Define gates that require multiple workstreams to complete
   - `milestone_create(project, name, description?)` - Create a milestone
   - `milestone_get(project, name)` - Get milestone with computed status and requirements list

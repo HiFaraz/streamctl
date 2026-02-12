@@ -54,14 +54,6 @@ func Render(ws *Workstream) string {
 	b.WriteString(ws.Objective)
 	b.WriteString("\n\n")
 
-	// Key Context
-	b.WriteString("## Key Context\n")
-	if ws.KeyContext != "" {
-		b.WriteString(ws.KeyContext)
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-
 	// Plan
 	b.WriteString("## Plan\n")
 	for i, item := range ws.Plan {
@@ -89,14 +81,6 @@ func Render(ws *Workstream) string {
 				b.WriteString("\n")
 			}
 		}
-	}
-	b.WriteString("\n")
-
-	// Decisions
-	b.WriteString("## Decisions\n")
-	if ws.Decisions != "" {
-		b.WriteString(ws.Decisions)
-		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 

@@ -57,11 +57,9 @@ type Workstream struct {
 	NeedsHelp  bool   // Flag indicating workstream is stuck/at-risk
 
 	// Content sections
-	Objective  string
-	KeyContext string
-	Plan       []PlanItem
-	Decisions  string
-	Log        []LogEntry
+	Objective string
+	Plan      []PlanItem
+	Log       []LogEntry
 
 	// Dependencies
 	BlockedBy []Dependency // Workstreams that block this one
