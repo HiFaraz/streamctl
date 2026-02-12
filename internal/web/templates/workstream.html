@@ -554,7 +554,7 @@
         // Store log contents with proper newline preservation
         const logContents = {
             {{range .Workstream.Log}}
-            "{{.Timestamp.Unix}}": {{js .Content}},
+            "{{.Timestamp.Unix}}": "{{js .Content}}",
             {{end}}
         };
 
