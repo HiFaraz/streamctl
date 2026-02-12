@@ -7,6 +7,7 @@ MCP server + TUI for managing workstreams across projects.
 ```bash
 make build                    # Build binary
 make test                     # Run tests
+make hooks                    # Install git hooks (rebuilds binary on commit)
 ./streamctl init              # Initialize database
 ./streamctl serve             # Start MCP server
 ./streamctl tui               # Launch TUI dashboard

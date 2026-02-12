@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+# Rebuild binary before commit
+echo "Rebuilding streamctl binary..."
+make build
