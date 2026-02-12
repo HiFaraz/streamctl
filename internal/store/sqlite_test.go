@@ -916,3 +916,82 @@ func TestUpdateMilestoneDescription(t *testing.T) {
 		t.Errorf("Description = %q, want 'Updated description'", m.Description)
 	}
 }
+
+func TestUpdateLogEntry_UnescapesNewlines(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "Newline Test", Project: "proj", State: workstream.StatePending})
+
+	// Simulate MCP sending escaped newlines (literal backslash-n)
+	logEntry := "Line 1\\nLine 2\\n\\nLine 4"
+	s.Update("proj", "Newline Test", WorkstreamUpdate{LogEntry: &logEntry})
+
+	got, _ := s.Get("proj", "Newline Test")
+	if len(got.Log) != 1 {
+		t.Fatalf("Log length = %d, want 1", len(got.Log))
+	}
+
+	// Should be stored with actual newlines, not literal \n
+	want := "Line 1\nLine 2\n\nLine 4"
+	if got.Log[0].Content != want {
+		t.Errorf("Log[0].Content = %q, want %q", got.Log[0].Content, want)
+	}
+}
+
+func TestUpdateLogEntry_UnescapesUnicodeNewlines(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "Unicode Test", Project: "proj", State: workstream.StatePending})
+
+	// Simulate MCP sending Unicode escaped newlines
+	logEntry := "Line 1\\u000ALine 2\\u000A\\u000ALine 4"
+	s.Update("proj", "Unicode Test", WorkstreamUpdate{LogEntry: &logEntry})
+
+	got, _ := s.Get("proj", "Unicode Test")
+	if len(got.Log) != 1 {
+		t.Fatalf("Log length = %d, want 1", len(got.Log))
+	}
+
+	want := "Line 1\nLine 2\n\nLine 4"
+	if got.Log[0].Content != want {
+		t.Errorf("Log[0].Content = %q, want %q", got.Log[0].Content, want)
+	}
+}
+
+func TestMigrateLogNewlines(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "Migration Test", Project: "proj", State: workstream.StatePending})
+
+	// Insert log entry with escaped newlines directly (bypassing Update fix)
+	var wsID int64
+	s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, "proj", "Migration Test").Scan(&wsID)
+	s.db.Exec(`INSERT INTO log_entries (workstream_id, timestamp, content) VALUES (?, ?, ?)`,
+		wsID, "2025-01-01 00:00:00", "Line 1\\nLine 2\\n\\nLine 4")
+
+	// Run migration
+	affected, err := s.MigrateLogNewlines()
+	if err != nil {
+		t.Fatalf("MigrateLogNewlines() error = %v", err)
+	}
+	if affected != 1 {
+		t.Errorf("MigrateLogNewlines() affected = %d, want 1", affected)
+	}
+
+	// Verify the content was fixed
+	got, _ := s.Get("proj", "Migration Test")
+	if len(got.Log) != 1 {
+		t.Fatalf("Log length = %d, want 1", len(got.Log))
+	}
+
+	want := "Line 1\nLine 2\n\nLine 4"
+	if got.Log[0].Content != want {
+		t.Errorf("Log[0].Content = %q, want %q", got.Log[0].Content, want)
+	}
+}

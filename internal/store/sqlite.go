@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -457,8 +458,11 @@ func (s *Store) Update(project, name string, updates WorkstreamUpdate) error {
 
 	// Append log entry
 	if updates.LogEntry != nil {
+		// Unescape literal \n and \u000A to actual newlines (MCP sends escaped newlines)
+		content := strings.ReplaceAll(*updates.LogEntry, "\\n", "\n")
+		content = strings.ReplaceAll(content, "\\u000A", "\n")
 		_, err := tx.Exec(`INSERT INTO log_entries (workstream_id, timestamp, content) VALUES (?, ?, ?)`,
-			wsID, time.Now().UTC(), *updates.LogEntry)
+			wsID, time.Now().UTC(), content)
 		if err != nil {
 			return err
 		}
@@ -964,4 +968,29 @@ func computeMilestoneStatus(reqs []workstream.MilestoneRequirement) workstream.S
 		return workstream.StateInProgress
 	}
 	return workstream.StatePending
+}
+
+// MigrateLogNewlines fixes existing log entries that have escaped newlines
+func (s *Store) MigrateLogNewlines() (int64, error) {
+	// Fix \n escapes
+	result1, err := s.db.Exec(`
+		UPDATE log_entries
+		SET content = REPLACE(content, '\n', char(10))
+		WHERE content LIKE '%\n%'`)
+	if err != nil {
+		return 0, err
+	}
+	affected1, _ := result1.RowsAffected()
+
+	// Fix \u000A escapes
+	result2, err := s.db.Exec(`
+		UPDATE log_entries
+		SET content = REPLACE(content, '\u000A', char(10))
+		WHERE content LIKE '%\u000A%'`)
+	if err != nil {
+		return affected1, err
+	}
+	affected2, _ := result2.RowsAffected()
+
+	return affected1 + affected2, nil
 }
