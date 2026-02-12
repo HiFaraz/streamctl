@@ -103,6 +103,24 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_log_entries_workstream ON log_entries(workstream_id);
 	CREATE INDEX IF NOT EXISTS idx_deps_blocker ON workstream_dependencies(blocker_id);
 	CREATE INDEX IF NOT EXISTS idx_deps_blocked ON workstream_dependencies(blocked_id);
+
+	CREATE TABLE IF NOT EXISTS milestones (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		project TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(project, name)
+	);
+
+	CREATE TABLE IF NOT EXISTS milestone_requirements (
+		milestone_id INTEGER NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+		workstream_id INTEGER NOT NULL REFERENCES workstreams(id) ON DELETE CASCADE,
+		PRIMARY KEY (milestone_id, workstream_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_milestones_project ON milestones(project);
+	CREATE INDEX IF NOT EXISTS idx_milestone_reqs_milestone ON milestone_requirements(milestone_id);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -762,4 +780,174 @@ func (s *Store) Search(project, query, wsFilter string) ([]SearchResult, error) 
 	}
 
 	return results, nil
+}
+
+// CreateMilestone creates a new milestone
+func (s *Store) CreateMilestone(m *workstream.Milestone) error {
+	_, err := s.db.Exec(`
+		INSERT INTO milestones (project, name, description)
+		VALUES (?, ?, ?)`,
+		m.Project, m.Name, m.Description,
+	)
+	return err
+}
+
+// GetMilestone retrieves a milestone by project and name
+func (s *Store) GetMilestone(project, name string) (*workstream.Milestone, error) {
+	m := &workstream.Milestone{}
+	var milestoneID int64
+
+	err := s.db.QueryRow(`
+		SELECT id, project, name, description, created_at
+		FROM milestones WHERE project = ? AND name = ?`,
+		project, name,
+	).Scan(&milestoneID, &m.Project, &m.Name, &m.Description, &m.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load requirements with current workstream states
+	rows, err := s.db.Query(`
+		SELECT w.project, w.name, w.state
+		FROM milestone_requirements mr
+		JOIN workstreams w ON mr.workstream_id = w.id
+		WHERE mr.milestone_id = ?`,
+		milestoneID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var req workstream.MilestoneRequirement
+		if err := rows.Scan(&req.WorkstreamProject, &req.WorkstreamName, &req.WorkstreamState); err != nil {
+			return nil, err
+		}
+		m.Requirements = append(m.Requirements, req)
+	}
+
+	// Compute status based on requirements
+	m.Status = computeMilestoneStatus(m.Requirements)
+
+	return m, nil
+}
+
+// ListMilestones returns milestones, optionally filtered by project
+func (s *Store) ListMilestones(project string) ([]workstream.Milestone, error) {
+	query := `SELECT id, project, name, description, created_at FROM milestones`
+	var args []any
+
+	if project != "" {
+		query += " WHERE project = ?"
+		args = append(args, project)
+	}
+	query += " ORDER BY project, name"
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var milestones []workstream.Milestone
+	for rows.Next() {
+		var m workstream.Milestone
+		var milestoneID int64
+		if err := rows.Scan(&milestoneID, &m.Project, &m.Name, &m.Description, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+
+		// Load requirements for each milestone
+		reqRows, err := s.db.Query(`
+			SELECT w.project, w.name, w.state
+			FROM milestone_requirements mr
+			JOIN workstreams w ON mr.workstream_id = w.id
+			WHERE mr.milestone_id = ?`, milestoneID)
+		if err != nil {
+			return nil, err
+		}
+		for reqRows.Next() {
+			var req workstream.MilestoneRequirement
+			reqRows.Scan(&req.WorkstreamProject, &req.WorkstreamName, &req.WorkstreamState)
+			m.Requirements = append(m.Requirements, req)
+		}
+		reqRows.Close()
+
+		m.Status = computeMilestoneStatus(m.Requirements)
+		milestones = append(milestones, m)
+	}
+
+	return milestones, nil
+}
+
+// AddMilestoneRequirement adds a workstream as a requirement for a milestone
+func (s *Store) AddMilestoneRequirement(milestoneProject, milestoneName, wsProject, wsName string) error {
+	var milestoneID, wsID int64
+
+	err := s.db.QueryRow(`SELECT id FROM milestones WHERE project = ? AND name = ?`, milestoneProject, milestoneName).Scan(&milestoneID)
+	if err != nil {
+		return fmt.Errorf("milestone not found: %s/%s", milestoneProject, milestoneName)
+	}
+
+	err = s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, wsProject, wsName).Scan(&wsID)
+	if err != nil {
+		return fmt.Errorf("workstream not found: %s/%s", wsProject, wsName)
+	}
+
+	_, err = s.db.Exec(`INSERT INTO milestone_requirements (milestone_id, workstream_id) VALUES (?, ?)`, milestoneID, wsID)
+	return err
+}
+
+// UpdateMilestoneDescription updates a milestone's description
+func (s *Store) UpdateMilestoneDescription(project, name, description string) error {
+	result, err := s.db.Exec(`UPDATE milestones SET description = ? WHERE project = ? AND name = ?`, description, project, name)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("milestone not found: %s/%s", project, name)
+	}
+	return nil
+}
+
+// RemoveMilestoneRequirement removes a workstream requirement from a milestone
+func (s *Store) RemoveMilestoneRequirement(milestoneProject, milestoneName, wsProject, wsName string) error {
+	var milestoneID, wsID int64
+
+	err := s.db.QueryRow(`SELECT id FROM milestones WHERE project = ? AND name = ?`, milestoneProject, milestoneName).Scan(&milestoneID)
+	if err != nil {
+		return fmt.Errorf("milestone not found: %s/%s", milestoneProject, milestoneName)
+	}
+
+	err = s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, wsProject, wsName).Scan(&wsID)
+	if err != nil {
+		return fmt.Errorf("workstream not found: %s/%s", wsProject, wsName)
+	}
+
+	_, err = s.db.Exec(`DELETE FROM milestone_requirements WHERE milestone_id = ? AND workstream_id = ?`, milestoneID, wsID)
+	return err
+}
+
+// computeMilestoneStatus determines milestone status from requirements
+func computeMilestoneStatus(reqs []workstream.MilestoneRequirement) workstream.State {
+	if len(reqs) == 0 {
+		return workstream.StatePending
+	}
+
+	doneCount := 0
+	for _, req := range reqs {
+		if req.WorkstreamState == workstream.StateDone {
+			doneCount++
+		}
+	}
+
+	if doneCount == len(reqs) {
+		return workstream.StateDone
+	}
+	if doneCount > 0 {
+		return workstream.StateInProgress
+	}
+	return workstream.StatePending
 }

@@ -4,6 +4,21 @@
 
 ### Added
 
+- **Cross-workstream milestones**: Define gates that require multiple workstreams to complete
+  - `milestone_create(project, name, description?)` - Create a milestone
+  - `milestone_get(project, name)` - Get milestone with computed status and requirements list
+  - `milestone_list(project?)` - List milestones with computed status
+  - `milestone_update(project, name, add_requirement?, remove_requirement?, description?)` - Modify milestone
+  - Status computed automatically: `pending` (none done), `in_progress` (some done), `done` (all done)
+  - Ideal for coordinating agent teams: "Is wave 1 done?" via MCP without reading external files
+  - Example:
+    ```
+    milestone_create(project="fleetadm", name="wave-1", description="Foundation layer")
+    milestone_update(project="fleetadm", name="wave-1", add_requirement="fleetadm/auth")
+    milestone_update(project="fleetadm", name="wave-1", add_requirement="fleetadm/api")
+    milestone_get(project="fleetadm", name="wave-1")  # Shows status=in_progress if some done
+    ```
+
 - **Web UI server** (`web_serve` MCP tool): Start a browser-based dashboard to view workstreams
   - Modern dark theme with sidebar navigation
   - Dashboard home page with insights and activity feed

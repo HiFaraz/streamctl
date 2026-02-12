@@ -40,6 +40,8 @@ workstreams (id, project, name, state, owner, objective, key_context, decisions,
 plan_items (id, workstream_id, position, text, complete, status, notes)
 log_entries (id, workstream_id, timestamp, content)
 workstream_dependencies (blocker_id, blocked_id, created_at)
+milestones (id, project, name, description, created_at)
+milestone_requirements (milestone_id, workstream_id)
 ```
 
 ## MCP Tools
@@ -53,6 +55,10 @@ workstream_dependencies (blocker_id, blocked_id, created_at)
 | `workstream_claim` | Set ownership of a workstream |
 | `workstream_release` | Release ownership |
 | `web_serve` | Start web UI server, returns URL with floating port |
+| `milestone_create` | Create a cross-workstream gate/checkpoint |
+| `milestone_get` | Get milestone with computed status and requirements |
+| `milestone_list` | List milestones with computed status |
+| `milestone_update` | Add/remove requirements, update description |
 
 ### workstream_update Parameters
 
@@ -73,6 +79,21 @@ workstream_dependencies (blocker_id, blocked_id, created_at)
 **Task statuses:** `pending`, `in_progress`, `done`, `skipped`
 **Task notes:** Supports markdown (code blocks, lists, links, headers)
 **Log entries:** Support markdown for rich context, code snippets, decision rationale
+
+### milestone_update Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `project` | string | Project name (required) |
+| `name` | string | Milestone name (required) |
+| `description` | string | Update milestone description |
+| `add_requirement` | string | Add workstream requirement: `project/name` |
+| `remove_requirement` | string | Remove workstream requirement: `project/name` |
+
+**Milestone status** (computed automatically):
+- `pending` - no required workstreams are done
+- `in_progress` - some (but not all) are done
+- `done` - ALL required workstreams have state="done"
 
 ## TUI Features
 

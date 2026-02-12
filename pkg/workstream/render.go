@@ -117,3 +117,47 @@ func Render(ws *Workstream) string {
 func Serialize(ws *Workstream) string {
 	return Render(ws)
 }
+
+// RenderMilestone converts a Milestone to markdown format
+func RenderMilestone(m *Milestone) string {
+	var b strings.Builder
+
+	b.WriteString("# Milestone: ")
+	b.WriteString(m.Name)
+	b.WriteString("\n\n")
+
+	b.WriteString("## Status\n")
+	b.WriteString("State: ")
+	b.WriteString(string(m.Status))
+	b.WriteString("\n")
+	if !m.CreatedAt.IsZero() {
+		b.WriteString("Created: ")
+		b.WriteString(m.CreatedAt.Format(TimeFormat))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	if m.Description != "" {
+		b.WriteString("## Description\n")
+		b.WriteString(m.Description)
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString("## Requirements\n")
+	if len(m.Requirements) == 0 {
+		b.WriteString("_No requirements defined_\n")
+	} else {
+		doneCount := 0
+		for _, req := range m.Requirements {
+			marker := "[ ]"
+			if req.WorkstreamState == StateDone {
+				marker = "[x]"
+				doneCount++
+			}
+			b.WriteString(fmt.Sprintf("- %s %s/%s (%s)\n", marker, req.WorkstreamProject, req.WorkstreamName, req.WorkstreamState))
+		}
+		b.WriteString(fmt.Sprintf("\nProgress: %d/%d complete\n", doneCount, len(m.Requirements)))
+	}
+
+	return b.String()
+}

@@ -101,6 +101,46 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 		),
 		h.HandleWebServe,
 	)
+
+	// Milestone tools
+	s.AddTool(
+		mcp.NewTool("milestone_create",
+			mcp.WithDescription("Create a new milestone (cross-workstream gate)"),
+			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+			mcp.WithString("name", mcp.Description("Milestone name"), mcp.Required()),
+			mcp.WithString("description", mcp.Description("Description of the milestone")),
+		),
+		h.HandleMilestoneCreate,
+	)
+
+	s.AddTool(
+		mcp.NewTool("milestone_get",
+			mcp.WithDescription("Get milestone with computed status and requirements"),
+			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+			mcp.WithString("name", mcp.Description("Milestone name"), mcp.Required()),
+		),
+		h.HandleMilestoneGet,
+	)
+
+	s.AddTool(
+		mcp.NewTool("milestone_list",
+			mcp.WithDescription("List milestones with computed status"),
+			mcp.WithString("project", mcp.Description("Filter by project name")),
+		),
+		h.HandleMilestoneList,
+	)
+
+	s.AddTool(
+		mcp.NewTool("milestone_update",
+			mcp.WithDescription("Update milestone (add/remove requirements, update description)"),
+			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+			mcp.WithString("name", mcp.Description("Milestone name"), mcp.Required()),
+			mcp.WithString("description", mcp.Description("New description")),
+			mcp.WithString("add_requirement", mcp.Description("Add workstream requirement: 'project/name'")),
+			mcp.WithString("remove_requirement", mcp.Description("Remove workstream requirement: 'project/name'")),
+		),
+		h.HandleMilestoneUpdate,
+	)
 }
 
 // HandleList lists workstreams with optional filters
@@ -378,6 +418,121 @@ func (h *Handlers) HandleWebServe(ctx context.Context, req mcp.CallToolRequest) 
 	}()
 
 	return mcp.NewToolResultText(fmt.Sprintf("Web UI started at %s for project '%s'", url, project)), nil
+}
+
+// HandleMilestoneCreate creates a new milestone
+func (h *Handlers) HandleMilestoneCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	name := mcp.ParseString(req, "name", "")
+	description := mcp.ParseString(req, "description", "")
+
+	if project == "" || name == "" {
+		return mcp.NewToolResultError("project and name are required"), nil
+	}
+
+	m := &workstream.Milestone{
+		Name:        name,
+		Project:     project,
+		Description: description,
+	}
+
+	if err := h.store.CreateMilestone(m); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText("Created milestone: " + project + "/" + name), nil
+}
+
+// HandleMilestoneGet returns a milestone with computed status
+func (h *Handlers) HandleMilestoneGet(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	name := mcp.ParseString(req, "name", "")
+
+	if project == "" || name == "" {
+		return mcp.NewToolResultError("project and name are required"), nil
+	}
+
+	m, err := h.store.GetMilestone(project, name)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(workstream.RenderMilestone(m)), nil
+}
+
+// HandleMilestoneList lists milestones with optional project filter
+func (h *Handlers) HandleMilestoneList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+
+	milestones, err := h.store.ListMilestones(project)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	type msSummary struct {
+		Project     string `json:"project"`
+		Name        string `json:"name"`
+		Status      string `json:"status"`
+		Description string `json:"description,omitempty"`
+		NumReqs     int    `json:"num_requirements"`
+	}
+
+	summaries := make([]msSummary, len(milestones))
+	for i, m := range milestones {
+		summaries[i] = msSummary{
+			Project:     m.Project,
+			Name:        m.Name,
+			Status:      string(m.Status),
+			Description: m.Description,
+			NumReqs:     len(m.Requirements),
+		}
+	}
+
+	data, _ := json.MarshalIndent(summaries, "", "  ")
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// HandleMilestoneUpdate updates a milestone
+func (h *Handlers) HandleMilestoneUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	name := mcp.ParseString(req, "name", "")
+
+	if project == "" || name == "" {
+		return mcp.NewToolResultError("project and name are required"), nil
+	}
+
+	// Update description
+	if desc := mcp.ParseString(req, "description", ""); desc != "" {
+		if err := h.store.UpdateMilestoneDescription(project, name, desc); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
+
+	// Add requirement
+	if addReq := mcp.ParseString(req, "add_requirement", ""); addReq != "" {
+		parts := splitProjectName(addReq)
+		if len(parts) == 2 {
+			if err := h.store.AddMilestoneRequirement(project, name, parts[0], parts[1]); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		} else {
+			return mcp.NewToolResultError("add_requirement must be in format 'project/name'"), nil
+		}
+	}
+
+	// Remove requirement
+	if removeReq := mcp.ParseString(req, "remove_requirement", ""); removeReq != "" {
+		parts := splitProjectName(removeReq)
+		if len(parts) == 2 {
+			if err := h.store.RemoveMilestoneRequirement(project, name, parts[0], parts[1]); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		} else {
+			return mcp.NewToolResultError("remove_requirement must be in format 'project/name'"), nil
+		}
+	}
+
+	return mcp.NewToolResultText("Updated milestone: " + project + "/" + name), nil
 }
 
 // NewServer creates a new MCP server with workstream tools

@@ -450,3 +450,143 @@ func TestHandleWebServe(t *testing.T) {
 		t.Errorf("Result should contain localhost URL, got: %s", text)
 	}
 }
+
+func TestHandleMilestoneCreate(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":     "testproject",
+				"name":        "wave-1",
+				"description": "Foundation layer",
+			},
+		},
+	}
+	result, err := h.HandleMilestoneCreate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneCreate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleMilestoneCreate() returned error result")
+	}
+
+	// Verify created
+	m, err := st.GetMilestone("testproject", "wave-1")
+	if err != nil {
+		t.Fatalf("GetMilestone() error = %v", err)
+	}
+	if m.Description != "Foundation layer" {
+		t.Errorf("Description = %q, want 'Foundation layer'", m.Description)
+	}
+}
+
+func TestHandleMilestoneGet(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	// Create milestone with requirements
+	st.CreateMilestone(&workstream.Milestone{Name: "gate", Project: "testproject"})
+	st.AddMilestoneRequirement("testproject", "gate", "testproject", "Feature One")
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+				"name":    "gate",
+			},
+		},
+	}
+	result, err := h.HandleMilestoneGet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneGet() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleMilestoneGet() returned error result")
+	}
+
+	// Should contain milestone info
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "gate") {
+		t.Errorf("Result should contain milestone name, got: %s", text)
+	}
+}
+
+func TestHandleMilestoneList(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	st.CreateMilestone(&workstream.Milestone{Name: "gate-1", Project: "testproject"})
+	st.CreateMilestone(&workstream.Milestone{Name: "gate-2", Project: "testproject"})
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+			},
+		},
+	}
+	result, err := h.HandleMilestoneList(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneList() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleMilestoneList() returned error result")
+	}
+
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "gate-1") || !strings.Contains(text, "gate-2") {
+		t.Errorf("Result should contain both milestones, got: %s", text)
+	}
+}
+
+func TestHandleMilestoneUpdate(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	st.CreateMilestone(&workstream.Milestone{Name: "gate", Project: "testproject"})
+
+	// Add requirement
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":         "testproject",
+				"name":            "gate",
+				"add_requirement": "testproject/Feature One",
+			},
+		},
+	}
+	result, err := h.HandleMilestoneUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleMilestoneUpdate() returned error result")
+	}
+
+	m, _ := st.GetMilestone("testproject", "gate")
+	if len(m.Requirements) != 1 {
+		t.Fatalf("Requirements = %d, want 1", len(m.Requirements))
+	}
+
+	// Update description
+	req = mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":     "testproject",
+				"name":        "gate",
+				"description": "Updated desc",
+			},
+		},
+	}
+	result, err = h.HandleMilestoneUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneUpdate() error = %v", err)
+	}
+
+	m, _ = st.GetMilestone("testproject", "gate")
+	if m.Description != "Updated desc" {
+		t.Errorf("Description = %q, want 'Updated desc'", m.Description)
+	}
+}

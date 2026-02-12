@@ -688,3 +688,203 @@ func TestNeedsHelp(t *testing.T) {
 		t.Error("NeedsHelp should be false after clearing")
 	}
 }
+
+func TestCreateAndGetMilestone(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	m := &workstream.Milestone{
+		Name:        "wave-1-complete",
+		Project:     "myproject",
+		Description: "Foundation layer complete",
+	}
+
+	err := s.CreateMilestone(m)
+	if err != nil {
+		t.Fatalf("CreateMilestone() error = %v", err)
+	}
+
+	got, err := s.GetMilestone("myproject", "wave-1-complete")
+	if err != nil {
+		t.Fatalf("GetMilestone() error = %v", err)
+	}
+
+	if got.Name != m.Name {
+		t.Errorf("Name = %q, want %q", got.Name, m.Name)
+	}
+	if got.Project != m.Project {
+		t.Errorf("Project = %q, want %q", got.Project, m.Project)
+	}
+	if got.Description != m.Description {
+		t.Errorf("Description = %q, want %q", got.Description, m.Description)
+	}
+	// Status should be pending (no requirements)
+	if got.Status != workstream.StatePending {
+		t.Errorf("Status = %q, want pending", got.Status)
+	}
+}
+
+func TestMilestoneRequirements(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj", State: workstream.StatePending})
+
+	// Create milestone
+	s.CreateMilestone(&workstream.Milestone{Name: "wave-1", Project: "proj"})
+
+	// Add requirements
+	err := s.AddMilestoneRequirement("proj", "wave-1", "proj", "auth")
+	if err != nil {
+		t.Fatalf("AddMilestoneRequirement() error = %v", err)
+	}
+	err = s.AddMilestoneRequirement("proj", "wave-1", "proj", "api")
+	if err != nil {
+		t.Fatalf("AddMilestoneRequirement() error = %v", err)
+	}
+
+	// Verify requirements
+	m, _ := s.GetMilestone("proj", "wave-1")
+	if len(m.Requirements) != 2 {
+		t.Fatalf("Requirements length = %d, want 2", len(m.Requirements))
+	}
+	if m.Status != workstream.StatePending {
+		t.Errorf("Status = %q, want pending (no workstreams done)", m.Status)
+	}
+}
+
+func TestMilestoneStatusComputation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams
+	s.Create(&workstream.Workstream{Name: "ws-a", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "ws-b", Project: "proj", State: workstream.StatePending})
+
+	// Create milestone with requirements
+	s.CreateMilestone(&workstream.Milestone{Name: "gate", Project: "proj"})
+	s.AddMilestoneRequirement("proj", "gate", "proj", "ws-a")
+	s.AddMilestoneRequirement("proj", "gate", "proj", "ws-b")
+
+	// Status should be pending (all pending)
+	m, _ := s.GetMilestone("proj", "gate")
+	if m.Status != workstream.StatePending {
+		t.Errorf("Status = %q, want pending", m.Status)
+	}
+
+	// Complete one workstream -> in_progress
+	doneState := workstream.StateDone
+	s.Update("proj", "ws-a", WorkstreamUpdate{State: &doneState})
+
+	m, _ = s.GetMilestone("proj", "gate")
+	if m.Status != workstream.StateInProgress {
+		t.Errorf("Status = %q, want in_progress", m.Status)
+	}
+
+	// Complete second workstream -> done
+	s.Update("proj", "ws-b", WorkstreamUpdate{State: &doneState})
+
+	m, _ = s.GetMilestone("proj", "gate")
+	if m.Status != workstream.StateDone {
+		t.Errorf("Status = %q, want done", m.Status)
+	}
+}
+
+func TestListMilestones(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams and milestones
+	s.Create(&workstream.Workstream{Name: "ws-1", Project: "proj", State: workstream.StateDone})
+	s.Create(&workstream.Workstream{Name: "ws-2", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "ws-3", Project: "other", State: workstream.StatePending})
+
+	s.CreateMilestone(&workstream.Milestone{Name: "gate-1", Project: "proj"})
+	s.CreateMilestone(&workstream.Milestone{Name: "gate-2", Project: "proj"})
+	s.CreateMilestone(&workstream.Milestone{Name: "gate-3", Project: "other"})
+
+	s.AddMilestoneRequirement("proj", "gate-1", "proj", "ws-1")
+	s.AddMilestoneRequirement("proj", "gate-2", "proj", "ws-2")
+
+	// List all
+	all, err := s.ListMilestones("")
+	if err != nil {
+		t.Fatalf("ListMilestones() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("ListMilestones() = %d, want 3", len(all))
+	}
+
+	// Filter by project
+	projOnly, _ := s.ListMilestones("proj")
+	if len(projOnly) != 2 {
+		t.Errorf("ListMilestones(proj) = %d, want 2", len(projOnly))
+	}
+
+	// gate-1 should be done (ws-1 is done)
+	for _, m := range projOnly {
+		if m.Name == "gate-1" && m.Status != workstream.StateDone {
+			t.Errorf("gate-1 status = %q, want done", m.Status)
+		}
+		if m.Name == "gate-2" && m.Status != workstream.StatePending {
+			t.Errorf("gate-2 status = %q, want pending", m.Status)
+		}
+	}
+}
+
+func TestRemoveMilestoneRequirement(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj", State: workstream.StatePending})
+
+	s.CreateMilestone(&workstream.Milestone{Name: "gate", Project: "proj"})
+	s.AddMilestoneRequirement("proj", "gate", "proj", "auth")
+	s.AddMilestoneRequirement("proj", "gate", "proj", "api")
+
+	// Verify 2 requirements
+	m, _ := s.GetMilestone("proj", "gate")
+	if len(m.Requirements) != 2 {
+		t.Fatalf("Requirements = %d, want 2", len(m.Requirements))
+	}
+
+	// Remove one
+	err := s.RemoveMilestoneRequirement("proj", "gate", "proj", "auth")
+	if err != nil {
+		t.Fatalf("RemoveMilestoneRequirement() error = %v", err)
+	}
+
+	m, _ = s.GetMilestone("proj", "gate")
+	if len(m.Requirements) != 1 {
+		t.Fatalf("Requirements = %d, want 1 after removal", len(m.Requirements))
+	}
+	if m.Requirements[0].WorkstreamName != "api" {
+		t.Errorf("Remaining requirement = %q, want 'api'", m.Requirements[0].WorkstreamName)
+	}
+}
+
+func TestUpdateMilestoneDescription(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.CreateMilestone(&workstream.Milestone{Name: "gate", Project: "proj", Description: "Original"})
+
+	err := s.UpdateMilestoneDescription("proj", "gate", "Updated description")
+	if err != nil {
+		t.Fatalf("UpdateMilestoneDescription() error = %v", err)
+	}
+
+	m, _ := s.GetMilestone("proj", "gate")
+	if m.Description != "Updated description" {
+		t.Errorf("Description = %q, want 'Updated description'", m.Description)
+	}
+}

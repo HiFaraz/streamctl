@@ -78,3 +78,20 @@ type ActivityEntry struct {
 	BlockedBy         string // First blocker name if blocked
 	RelativeTime      string // Human-readable relative time
 }
+
+// Milestone represents a cross-workstream gate/checkpoint
+type Milestone struct {
+	Name         string
+	Project      string
+	Description  string
+	CreatedAt    time.Time
+	Status       State // Computed: pending/in_progress/done
+	Requirements []MilestoneRequirement
+}
+
+// MilestoneRequirement represents a workstream required for a milestone
+type MilestoneRequirement struct {
+	WorkstreamProject string
+	WorkstreamName    string
+	WorkstreamState   State // Current state of the workstream
+}
