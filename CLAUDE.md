@@ -15,6 +15,7 @@ make hooks                    # Install git hooks (rebuilds binary on commit)
 ./streamctl list              # List workstreams (JSON)
 ./streamctl export PROJECT/NAME          # Export single workstream to stdout
 ./streamctl export PROJECT --dir ./dir/  # Export all to directory
+./streamctl log PROJECT "message"        # Log to active workstream
 ```
 
 ## Architecture
@@ -180,3 +181,40 @@ git add workstreams/*.md
 - **needs_help** = signal for attention, workstream is stuck and needs human intervention
 
 A workstream can be both. Use `needs_help=true` when repeatedly hitting issues.
+
+## Claude Code Hooks
+
+streamctl ships with hooks for Claude Code that auto-log progress.
+
+### TaskCompleted Hook
+
+Automatically logs task completions to the active workstream.
+
+Add to `~/.claude/settings.json`:
+```json
+{
+  "hooks": {
+    "TaskCompleted": [{
+      "hooks": [{
+        "type": "command",
+        "command": "/path/to/streamctl/hooks/task-completed.sh"
+      }]
+    }]
+  }
+}
+```
+
+When Claude marks a task complete via `TaskUpdate`, the hook:
+1. Extracts the task subject
+2. Detects the project from current directory
+3. Logs "Completed: {task}" to the active (in_progress) workstream
+
+### CLI Log Command
+
+Log directly from the command line:
+
+```bash
+streamctl log myproject "Completed: implement auth"
+```
+
+Logs to the most recently updated `in_progress` workstream for that project.
