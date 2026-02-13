@@ -58,10 +58,6 @@ func main() {
 		st := mustOpenStore(dbPath)
 		defer st.Close()
 		runExport(st)
-	case "log":
-		st := mustOpenStore(dbPath)
-		defer st.Close()
-		runLog(st)
 	case "version", "--version", "-v":
 		fmt.Println("streamctl", version)
 	case "help", "--help", "-h":
@@ -84,7 +80,6 @@ Usage:
   streamctl list [--project X]          List workstreams (JSON)
   streamctl export PROJECT/NAME         Export single workstream to stdout
   streamctl export PROJECT [--dir DIR]  Export all workstreams to directory
-  streamctl log PROJECT "message"       Log to active workstream
   streamctl version                     Show version
   streamctl help                        Show this help
 
@@ -238,20 +233,3 @@ func runWeb(st *store.Store) {
 	}
 }
 
-func runLog(st *store.Store) {
-	if len(os.Args) < 4 {
-		fmt.Fprintln(os.Stderr, "Usage: streamctl log PROJECT \"message\"")
-		os.Exit(1)
-	}
-
-	project := os.Args[2]
-	message := os.Args[3]
-
-	wsName, err := st.LogToActiveWorkstream(project, message)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Logged to %s/%s\n", project, wsName)
-}
