@@ -970,6 +970,38 @@ func computeMilestoneStatus(reqs []workstream.MilestoneRequirement) workstream.S
 	return workstream.StatePending
 }
 
+// LogToActiveWorkstream logs a message to the most recently updated in_progress workstream
+func (s *Store) LogToActiveWorkstream(project, message string) (string, error) {
+	// Find the most recently updated in_progress workstream
+	var wsID int64
+	var wsName string
+	err := s.db.QueryRow(`
+		SELECT id, name FROM workstreams
+		WHERE project = ? AND state = 'in_progress'
+		ORDER BY last_update DESC
+		LIMIT 1`,
+		project,
+	).Scan(&wsID, &wsName)
+	if err != nil {
+		return "", fmt.Errorf("no active workstream found for project %s", project)
+	}
+
+	// Add log entry
+	_, err = s.db.Exec(`INSERT INTO log_entries (workstream_id, timestamp, content) VALUES (?, ?, ?)`,
+		wsID, time.Now().UTC(), message)
+	if err != nil {
+		return "", err
+	}
+
+	// Update last_update
+	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
+	if err != nil {
+		return "", err
+	}
+
+	return wsName, nil
+}
+
 // MigrateLogNewlines fixes existing log entries that have escaped newlines
 func (s *Store) MigrateLogNewlines() (int64, error) {
 	// Fix \n escapes
