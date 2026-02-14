@@ -142,6 +142,15 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 		),
 		h.HandleMilestoneUpdate,
 	)
+
+	s.AddTool(
+		mcp.NewTool("milestone_delete",
+			mcp.WithDescription("Delete a milestone. This does NOT delete associated workstreams - milestones are just groupings that reference workstreams."),
+			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+			mcp.WithString("name", mcp.Description("Milestone name"), mcp.Required()),
+		),
+		h.HandleMilestoneDelete,
+	)
 }
 
 // HandleList lists workstreams with optional filters
@@ -542,6 +551,22 @@ func (h *Handlers) HandleMilestoneUpdate(ctx context.Context, req mcp.CallToolRe
 	}
 
 	return mcp.NewToolResultText("Updated milestone: " + project + "/" + name), nil
+}
+
+// HandleMilestoneDelete deletes a milestone (workstreams are NOT deleted)
+func (h *Handlers) HandleMilestoneDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	name := mcp.ParseString(req, "name", "")
+
+	if project == "" || name == "" {
+		return mcp.NewToolResultError("project and name are required"), nil
+	}
+
+	if err := h.store.DeleteMilestone(project, name); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText("Deleted milestone: " + project + "/" + name), nil
 }
 
 // NewServer creates a new MCP server with workstream tools

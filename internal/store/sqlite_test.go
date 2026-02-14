@@ -917,6 +917,61 @@ func TestUpdateMilestoneDescription(t *testing.T) {
 	}
 }
 
+func TestDeleteMilestone(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj", State: workstream.StatePending})
+
+	// Create milestone with requirements
+	s.CreateMilestone(&workstream.Milestone{Name: "wave-1", Project: "proj", Description: "Foundation"})
+	s.AddMilestoneRequirement("proj", "wave-1", "proj", "auth")
+	s.AddMilestoneRequirement("proj", "wave-1", "proj", "api")
+
+	// Delete the milestone
+	err := s.DeleteMilestone("proj", "wave-1")
+	if err != nil {
+		t.Fatalf("DeleteMilestone() error = %v", err)
+	}
+
+	// Milestone should be gone
+	_, err = s.GetMilestone("proj", "wave-1")
+	if err == nil {
+		t.Error("GetMilestone() should return error for deleted milestone")
+	}
+
+	// Workstreams should still exist (this is the key concern!)
+	auth, err := s.Get("proj", "auth")
+	if err != nil {
+		t.Fatalf("Workstream 'auth' was deleted when milestone was deleted: %v", err)
+	}
+	if auth.Name != "auth" {
+		t.Errorf("auth.Name = %q, want 'auth'", auth.Name)
+	}
+
+	api, err := s.Get("proj", "api")
+	if err != nil {
+		t.Fatalf("Workstream 'api' was deleted when milestone was deleted: %v", err)
+	}
+	if api.Name != "api" {
+		t.Errorf("api.Name = %q, want 'api'", api.Name)
+	}
+}
+
+func TestDeleteMilestone_NotFound(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	err := s.DeleteMilestone("proj", "nonexistent")
+	if err == nil {
+		t.Error("DeleteMilestone() should return error for non-existent milestone")
+	}
+}
+
 func TestUpdateLogEntry_UnescapesNewlines(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	s, _ := New(dbPath)

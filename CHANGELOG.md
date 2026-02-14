@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Milestone deletion**: `milestone_delete(project, name)` removes a milestone
+  - Workstreams are NOT deleted - milestones are groupings that reference workstreams, not owners
+  - Documentation clarified to explain the milestone-workstream relationship
+
 - **Workstream renaming**: `workstream_update(project, name, new_name="...")` to rename a workstream
 
 - **Markdown rendering in web UI logs**: Log entries now render markdown properly with line breaks

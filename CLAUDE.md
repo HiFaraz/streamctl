@@ -60,6 +60,7 @@ milestone_requirements (milestone_id, workstream_id)
 | `milestone_get` | Get milestone with computed status and requirements |
 | `milestone_list` | List milestones with computed status |
 | `milestone_update` | Add/remove requirements, update description |
+| `milestone_delete` | Delete a milestone (workstreams are NOT deleted) |
 
 ### workstream_update Parameters
 
@@ -96,6 +97,20 @@ milestone_requirements (milestone_id, workstream_id)
 - `pending` - no required workstreams are done
 - `in_progress` - some (but not all) are done
 - `done` - ALL required workstreams have state="done"
+
+### Milestones vs Workstreams
+
+Milestones are **groupings that reference workstreams**, not owners of them:
+
+```
+milestones ──references──> workstreams
+   (view)                  (independent)
+```
+
+- **Deleting a milestone does NOT delete the workstreams** it references
+- Workstreams are independent entities that exist on their own
+- A workstream can be referenced by multiple milestones
+- Milestones are checkpoints/gates for tracking progress across workstreams
 
 ## TUI Features
 

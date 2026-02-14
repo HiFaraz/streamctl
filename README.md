@@ -33,6 +33,7 @@ workstream_get(project="myapp", name="auth")
 - **Task tracking** with status (pending/in_progress/done/skipped) and markdown notes
 - **Decision log** - record why you chose X over Y, never re-litigate
 - **Dependencies** - mark workstreams as blocked by others
+- **Milestones** - group workstreams into checkpoints/gates for coordinating waves of work
 - **needs_help flag** - signal when you're stuck and need human attention
 - **Live web dashboard** - monitor parallel agents in real-time
 - **Keyboard-native UI** - navigate with `.`/`,`, `/` to search, `?` for help
@@ -107,6 +108,19 @@ workstream_update(name="api", add_blocker="myapp/auth")  # api waits for auth
 
 Dashboard shows what's blocked and why.
 
+### Milestones
+
+Group workstreams into checkpoints/gates:
+
+```
+milestone_create(project="myapp", name="wave-1", description="Foundation layer")
+milestone_update(name="wave-1", add_requirement="myapp/auth")
+milestone_update(name="wave-1", add_requirement="myapp/api")
+milestone_get(name="wave-1")  # status: pending/in_progress/done
+```
+
+**Important:** Milestones are groupings that *reference* workstreams - deleting a milestone does NOT delete the workstreams. Think of milestones as views or tags, not folders.
+
 ## CLI Commands
 
 ```bash
@@ -128,6 +142,11 @@ streamctl list               # JSON dump
 | `workstream_claim` | Set ownership |
 | `workstream_release` | Clear ownership |
 | `web_serve` | Start web dashboard, returns URL |
+| `milestone_create` | Create a cross-workstream gate/checkpoint |
+| `milestone_get` | Get milestone with computed status |
+| `milestone_list` | List milestones |
+| `milestone_update` | Add/remove requirements, update description |
+| `milestone_delete` | Delete milestone (workstreams are NOT deleted) |
 
 ### workstream_update Parameters
 

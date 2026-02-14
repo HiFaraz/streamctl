@@ -948,6 +948,21 @@ func (s *Store) RemoveMilestoneRequirement(milestoneProject, milestoneName, wsPr
 	return err
 }
 
+// DeleteMilestone removes a milestone. This does NOT delete associated workstreams -
+// milestones are just groupings that reference workstreams, not owners of them.
+func (s *Store) DeleteMilestone(project, name string) error {
+	result, err := s.db.Exec(`DELETE FROM milestones WHERE project = ? AND name = ?`, project, name)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("milestone not found: %s/%s", project, name)
+	}
+	// Note: milestone_requirements are deleted via ON DELETE CASCADE
+	return nil
+}
+
 // computeMilestoneStatus determines milestone status from requirements
 func computeMilestoneStatus(reqs []workstream.MilestoneRequirement) workstream.State {
 	if len(reqs) == 0 {

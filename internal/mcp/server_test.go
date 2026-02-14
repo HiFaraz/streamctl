@@ -590,3 +590,65 @@ func TestHandleMilestoneUpdate(t *testing.T) {
 		t.Errorf("Description = %q, want 'Updated desc'", m.Description)
 	}
 }
+
+func TestHandleMilestoneDelete(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	// Create milestone
+	st.CreateMilestone(&workstream.Milestone{Name: "to-delete", Project: "testproject"})
+	st.AddMilestoneRequirement("testproject", "to-delete", "testproject", "Feature One")
+
+	// Delete it
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+				"name":    "to-delete",
+			},
+		},
+	}
+	result, err := h.HandleMilestoneDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneDelete() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleMilestoneDelete() returned error result")
+	}
+
+	// Milestone should be gone
+	_, err = st.GetMilestone("testproject", "to-delete")
+	if err == nil {
+		t.Error("Milestone should have been deleted")
+	}
+
+	// Workstream should still exist
+	ws, err := st.Get("testproject", "Feature One")
+	if err != nil {
+		t.Fatalf("Workstream was deleted when milestone was deleted: %v", err)
+	}
+	if ws.Name != "Feature One" {
+		t.Errorf("ws.Name = %q, want 'Feature One'", ws.Name)
+	}
+}
+
+func TestHandleMilestoneDelete_NotFound(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+				"name":    "nonexistent",
+			},
+		},
+	}
+	result, err := h.HandleMilestoneDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleMilestoneDelete() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("HandleMilestoneDelete() should return error for non-existent milestone")
+	}
+}
