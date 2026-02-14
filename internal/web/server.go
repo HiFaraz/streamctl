@@ -17,6 +17,10 @@ var templateFS embed.FS
 
 var funcMap = template.FuncMap{
 	"add": func(a, b int) int { return a + b },
+	"json": func(v any) template.JS {
+		b, _ := json.Marshal(v)
+		return template.JS(b)
+	},
 }
 
 var templates = template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))

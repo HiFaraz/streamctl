@@ -651,18 +651,8 @@
         let filteredWorkstreams = [];
         let objectivePaneOpen = false;
 
-        // Helper to decode Go's {{js}} escaped strings (handles all unicode escapes)
-        function decodeJsString(s) {
-            try {
-                // JSON.parse properly decodes \uXXXX, \n, \t, etc.
-                return JSON.parse('"' + s + '"');
-            } catch (e) {
-                return s;
-            }
-        }
-
         // Full objective content (stored for pane)
-        const fullObjective = decodeJsString("{{js .Workstream.Objective}}");
+        const fullObjective = {{json .Workstream.Objective}};
 
         const workstreams = [
             {{range .AllWorkstreams}}
@@ -673,7 +663,7 @@
         // Store log contents with proper newline preservation
         const logContents = {
             {{range .Workstream.Log}}
-            "{{.Timestamp.Unix}}": "{{js .Content}}",
+            {{.Timestamp.Unix}}: {{json .Content}},
             {{end}}
         };
 
@@ -933,7 +923,7 @@
             document.querySelectorAll('.feed-item[data-type="log"]').forEach(item => {
                 const timestamp = item.dataset.timestamp;
                 // Decode Go's {{js}} escaped string (handles all unicode escapes)
-                const content = decodeJsString(logContents[timestamp] || '');
+                const content = logContents[timestamp] || '';
                 const logContent = item.querySelector('.log-content');
                 const hint = item.querySelector('.expand-hint');
 
