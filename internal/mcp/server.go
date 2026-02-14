@@ -426,7 +426,7 @@ func (h *Handlers) HandleWebServe(ctx context.Context, req mcp.CallToolRequest) 
 	}
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	url := fmt.Sprintf("http://localhost:%d", port)
+	url := fmt.Sprintf("http://%s.localhost:%d", project, port)
 
 	// Create and start the web server
 	srv := web.NewServer(h.store, project)

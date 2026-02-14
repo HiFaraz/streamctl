@@ -18,6 +18,7 @@
             --red: #c00;
             --amber: #b45309;
             --green: #166534;
+            --purple: #7c3aed;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -84,6 +85,14 @@
         .badge-help { background: #fee; color: var(--red); }
         .badge-task { background: #e0e7ff; color: #4338ca; }
         .badge-log { background: var(--bg-secondary); color: var(--text-muted); }
+        .badge-objective { background: #f3e8ff; color: var(--purple); }
+
+        /* Main content area - split pane layout */
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
 
         /* Feed */
         .feed {
@@ -127,6 +136,24 @@
 
         .feed-content {
             color: var(--text-primary);
+        }
+
+        /* Objective item styling */
+        .objective-content {
+            overflow: hidden;
+            max-height: 3.2em;
+            position: relative;
+        }
+        .objective-content::after {
+            content: '...';
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            padding-left: 4px;
+        }
+        .feed-item.selected .objective-content::after {
+            background: var(--focus);
         }
 
         .task-check {
@@ -249,6 +276,53 @@
         }
         .feed-item.selected .markdown-content pre {
             background: rgba(255,255,255,0.1);
+        }
+
+        /* Objective pane (right side, not overlay) */
+        .objective-pane {
+            width: 0;
+            overflow: hidden;
+            border-left: 1px solid var(--border);
+            background: var(--bg-primary);
+            transition: width 0.2s ease-out;
+            display: flex;
+            flex-direction: column;
+        }
+        .objective-pane.visible {
+            width: 50%;
+            min-width: 300px;
+            max-width: 600px;
+        }
+        .objective-pane-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+        .objective-pane-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .objective-pane-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .objective-pane-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+        .objective-pane-content .markdown-content {
+            line-height: 1.8;
+        }
+        .objective-pane-content .markdown-content h1 {
+            font-size: 1.3em;
+            margin-top: 0;
+        }
+        .objective-pane-content .markdown-content h2 {
+            font-size: 1.1em;
         }
 
         /* Info section */
@@ -449,7 +523,9 @@
             {{if .Workstream.Owner}}<span style="color: var(--text-muted);">Owner: {{.Workstream.Owner}}</span>{{end}}
         </div>
         {{if .Workstream.Objective}}
+        {{if le (len .Workstream.Objective) 200}}
         <div class="header-meta">{{.Workstream.Objective}}</div>
+        {{end}}
         {{end}}
     </header>
 
@@ -471,40 +547,69 @@
     </div>
     {{end}}
 
-    <main class="feed" id="feed" tabindex="0">
-        {{$taskCount := len .Workstream.Plan}}
-        {{range $i, $task := .Workstream.Plan}}
-        <article class="feed-item{{if eq $i 0}} selected{{end}}" data-index="{{$i}}" data-type="task">
-            <div class="feed-meta">
-                <span class="badge badge-task">task</span>
-            </div>
-            <div class="feed-body">
-                <div class="feed-content task-{{$task.Status}}">
-                    <span class="task-check">{{if eq $task.Status "done"}}✓{{else if eq $task.Status "in_progress"}}▸{{else if eq $task.Status "skipped"}}—{{end}}</span>
-                    <span class="{{if or (eq $task.Status "done") (eq $task.Status "skipped")}}task-text-done{{end}}">{{$task.Text}}</span>
+    <div class="main-container">
+        <main class="feed" id="feed" tabindex="0">
+            {{$hasLongObjective := gt (len .Workstream.Objective) 200}}
+            {{$objectiveOffset := 0}}
+            {{if $hasLongObjective}}{{$objectiveOffset = 1}}{{end}}
+
+            {{if $hasLongObjective}}
+            <article class="feed-item selected" data-index="0" data-type="objective">
+                <div class="feed-meta">
+                    <span class="badge badge-objective">objective</span>
                 </div>
-                {{if $task.Notes}}<div class="task-notes">{{$task.Notes}}</div>{{end}}
+                <div class="feed-body">
+                    <div class="feed-content objective-content">{{.Workstream.Objective}}</div>
+                    <div class="expand-hint"><kbd>→</kbd> to expand</div>
+                </div>
+            </article>
+            {{end}}
+
+            {{$taskCount := len .Workstream.Plan}}
+            {{range $i, $task := .Workstream.Plan}}
+            <article class="feed-item{{if and (not $hasLongObjective) (eq $i 0)}} selected{{end}}" data-index="{{add $objectiveOffset $i}}" data-type="task">
+                <div class="feed-meta">
+                    <span class="badge badge-task">task</span>
+                </div>
+                <div class="feed-body">
+                    <div class="feed-content task-{{$task.Status}}">
+                        <span class="task-check">{{if eq $task.Status "done"}}✓{{else if eq $task.Status "in_progress"}}▸{{else if eq $task.Status "skipped"}}—{{end}}</span>
+                        <span class="{{if or (eq $task.Status "done") (eq $task.Status "skipped")}}task-text-done{{end}}">{{$task.Text}}</span>
+                    </div>
+                    {{if $task.Notes}}<div class="task-notes">{{$task.Notes}}</div>{{end}}
+                </div>
+            </article>
+            {{end}}
+            {{range $i, $log := .Workstream.Log}}
+            <article class="feed-item{{if and (not $hasLongObjective) (eq $taskCount 0) (eq $i 0)}} selected{{end}}" data-index="{{add $objectiveOffset (add $taskCount $i)}}" data-type="log" data-timestamp="{{$log.Timestamp.Unix}}" id="log-{{$log.Timestamp.Unix}}">
+                <div class="feed-meta">
+                    <span class="badge badge-log">log</span>
+                    <span>{{$log.Timestamp.Format "Jan 2 15:04"}}</span>
+                </div>
+                <div class="feed-body">
+                    <div class="feed-content log-content markdown-content"></div>
+                    <div class="expand-hint" style="display: none;"><kbd>Enter</kbd> to expand</div>
+                </div>
+            </article>
+            {{end}}
+            {{if and (not $hasLongObjective) (eq (len .Workstream.Plan) 0) (eq (len .Workstream.Log) 0)}}
+            <div style="padding: 48px 16px; text-align: center; color: var(--text-muted);">
+                No tasks or log entries yet.
             </div>
-        </article>
-        {{end}}
-        {{range $i, $log := .Workstream.Log}}
-        <article class="feed-item{{if and (eq $taskCount 0) (eq $i 0)}} selected{{end}}" data-index="{{add $taskCount $i}}" data-type="log" data-timestamp="{{$log.Timestamp.Unix}}" id="log-{{$log.Timestamp.Unix}}">
-            <div class="feed-meta">
-                <span class="badge badge-log">log</span>
-                <span>{{$log.Timestamp.Format "Jan 2 15:04"}}</span>
+            {{end}}
+        </main>
+
+        <!-- Objective pane (right side split) -->
+        <aside class="objective-pane" id="objective-pane">
+            <div class="objective-pane-header">
+                <h2>Objective</h2>
+                <span class="objective-pane-hint"><kbd>←</kbd> to close</span>
             </div>
-            <div class="feed-body">
-                <div class="feed-content log-content markdown-content"></div>
-                <div class="expand-hint" style="display: none;"><kbd>Enter</kbd> to expand</div>
+            <div class="objective-pane-content">
+                <div class="markdown-content" id="objective-pane-content"></div>
             </div>
-        </article>
-        {{end}}
-        {{if and (eq (len .Workstream.Plan) 0) (eq (len .Workstream.Log) 0)}}
-        <div style="padding: 48px 16px; text-align: center; color: var(--text-muted);">
-            No tasks or log entries yet.
-        </div>
-        {{end}}
-    </main>
+        </aside>
+    </div>
 
     <footer class="status-bar">
         <div class="status-shortcuts">
@@ -529,7 +634,7 @@
         <div class="help-content">
             <h2>Keyboard Shortcuts</h2>
             <div class="help-row"><span>Navigate feed</span><span><kbd>↑</kbd> <kbd>↓</kbd></span></div>
-            <div class="help-row"><span>Expand log</span><span><kbd>→</kbd></span></div>
+            <div class="help-row"><span>Expand item</span><span><kbd>→</kbd></span></div>
             <div class="help-row"><span>Collapse / Back</span><span><kbd>←</kbd></span></div>
             <div class="help-row"><span>Back to dashboard</span><span><kbd>Backspace</kbd></span></div>
             <div class="help-row"><span>Search / Jump</span><span><kbd>/</kbd></span></div>
@@ -544,6 +649,20 @@
         let paletteSelectedIndex = 0;
         let paletteMode = 'actions'; // 'actions' or 'jump'
         let filteredWorkstreams = [];
+        let objectivePaneOpen = false;
+
+        // Helper to decode Go's {{js}} escaped strings (handles all unicode escapes)
+        function decodeJsString(s) {
+            try {
+                // JSON.parse properly decodes \uXXXX, \n, \t, etc.
+                return JSON.parse('"' + s + '"');
+            } catch (e) {
+                return s;
+            }
+        }
+
+        // Full objective content (stored for pane)
+        const fullObjective = decodeJsString("{{js .Workstream.Objective}}");
 
         const workstreams = [
             {{range .AllWorkstreams}}
@@ -713,6 +832,43 @@
             if (e.target.id === 'palette') closePalette();
         });
 
+        // Objective pane functions
+        function openObjectivePane() {
+            const pane = document.getElementById('objective-pane');
+            const content = document.getElementById('objective-pane-content');
+
+            // Render markdown (fullObjective is already decoded)
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({ breaks: true, gfm: true });
+                content.innerHTML = marked.parse(fullObjective);
+            } else {
+                content.textContent = fullObjective;
+            }
+
+            pane.classList.add('visible');
+            objectivePaneOpen = true;
+
+            // Update the hint on the objective item
+            const objItem = document.querySelector('.feed-item[data-type="objective"]');
+            if (objItem) {
+                const hint = objItem.querySelector('.expand-hint');
+                if (hint) hint.innerHTML = '<kbd>←</kbd> to collapse';
+            }
+        }
+
+        function closeObjectivePane() {
+            const pane = document.getElementById('objective-pane');
+            pane.classList.remove('visible');
+            objectivePaneOpen = false;
+
+            // Update the hint on the objective item
+            const objItem = document.querySelector('.feed-item[data-type="objective"]');
+            if (objItem) {
+                const hint = objItem.querySelector('.expand-hint');
+                if (hint) hint.innerHTML = '<kbd>→</kbd> to expand';
+            }
+        }
+
         document.addEventListener('keydown', (e) => {
             if (document.getElementById('palette').classList.contains('visible')) return;
             if (e.target.matches('input, textarea')) return;
@@ -733,7 +889,12 @@
                 case 'ArrowUp': case ',': selectItem(selectedIndex - 1); e.preventDefault(); break;
                 case 'Backspace': window.location.href = '/'; e.preventDefault(); break;
                 case 'ArrowLeft':
-                    // Try to collapse, if not possible go back
+                    // Try to collapse objective pane first, then log, then go back
+                    if (objectivePaneOpen) {
+                        closeObjectivePane();
+                        e.preventDefault();
+                        break;
+                    }
                     const itemsLeft = getFeedItems();
                     if (!collapseLog(itemsLeft[selectedIndex])) {
                         window.location.href = '/';
@@ -741,14 +902,29 @@
                     e.preventDefault();
                     break;
                 case 'ArrowRight':
-                    // Expand log if possible
+                    // Expand objective or log if possible
                     const itemsRight = getFeedItems();
-                    expandLog(itemsRight[selectedIndex]);
+                    const currentItem = itemsRight[selectedIndex];
+                    if (currentItem) {
+                        if (currentItem.dataset.type === 'objective') {
+                            if (!objectivePaneOpen) {
+                                openObjectivePane();
+                            }
+                        } else if (currentItem.dataset.type === 'log') {
+                            expandLog(currentItem);
+                        }
+                    }
                     e.preventDefault();
                     break;
                 case 'g': pendingG = true; setTimeout(() => pendingG = false, 1000); break;
                 case '?': toggleHelp(); e.preventDefault(); break;
                 case '/': openPalette(); e.preventDefault(); break;
+                case 'Escape':
+                    if (objectivePaneOpen) {
+                        closeObjectivePane();
+                        e.preventDefault();
+                    }
+                    break;
             }
         });
 
@@ -756,8 +932,8 @@
         function renderLogs() {
             document.querySelectorAll('.feed-item[data-type="log"]').forEach(item => {
                 const timestamp = item.dataset.timestamp;
-                // Go's {{js}} template escapes newlines as \u000A - convert to actual newlines
-                const content = (logContents[timestamp] || '').replace(/\\u000A/g, '\n').replace(/\\n/g, '\n');
+                // Decode Go's {{js}} escaped string (handles all unicode escapes)
+                const content = decodeJsString(logContents[timestamp] || '');
                 const logContent = item.querySelector('.log-content');
                 const hint = item.querySelector('.expand-hint');
 
@@ -822,7 +998,7 @@
                         selectItem(index);
                         // Auto-expand if navigating to a specific log
                         if (target.dataset.expanded === 'false') {
-                            toggleExpand(target);
+                            expandLog(target);
                         }
                         return;
                     }

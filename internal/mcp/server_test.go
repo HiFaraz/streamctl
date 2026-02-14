@@ -444,10 +444,10 @@ func TestHandleWebServe(t *testing.T) {
 		t.Errorf("HandleWebServe() returned error result")
 	}
 
-	// Result should contain a URL
+	// Result should contain a URL with project.localhost format
 	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "http://localhost:") {
-		t.Errorf("Result should contain localhost URL, got: %s", text)
+	if !strings.Contains(text, "http://testproject.localhost:") {
+		t.Errorf("Result should contain project.localhost URL, got: %s", text)
 	}
 }
 
