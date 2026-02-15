@@ -126,7 +126,6 @@ milestone_get(name="wave-1")  # status: pending/in_progress/done
 ```bash
 streamctl serve              # Start MCP server (for Claude Code)
 streamctl web                # Open web dashboard
-streamctl tui                # Terminal UI
 streamctl export PROJECT     # Export to markdown (for git)
 streamctl list               # JSON dump
 ```

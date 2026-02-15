@@ -9,7 +9,6 @@ import (
 
 	"github.com/faraz/streamctl/internal/mcp"
 	"github.com/faraz/streamctl/internal/store"
-	"github.com/faraz/streamctl/internal/tui"
 	"github.com/faraz/streamctl/internal/web"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -42,10 +41,6 @@ func main() {
 		st := mustOpenStore(dbPath)
 		defer st.Close()
 		runServer(st)
-	case "tui":
-		st := mustOpenStore(dbPath)
-		defer st.Close()
-		runTUI(st)
 	case "list":
 		st := mustOpenStore(dbPath)
 		defer st.Close()
@@ -75,7 +70,6 @@ func printUsage() {
 Usage:
   streamctl init                        Initialize the database
   streamctl serve                       Start MCP server (stdio)
-  streamctl tui                         Launch TUI dashboard
   streamctl web [--port PORT]           Start web UI (default: 8080)
   streamctl list [--project X]          List workstreams (JSON)
   streamctl export PROJECT/NAME         Export single workstream to stdout
@@ -122,13 +116,6 @@ func runServer(st *store.Store) {
 	s := mcp.NewServer(st)
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func runTUI(st *store.Store) {
-	if err := tui.Run(st); err != nil {
-		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 		os.Exit(1)
 	}
 }

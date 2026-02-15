@@ -1,6 +1,6 @@
 # streamctl
 
-MCP server + TUI for managing workstreams across projects.
+MCP server for managing workstreams across projects.
 
 ## Build Commands
 
@@ -10,7 +10,6 @@ make test                     # Run tests
 make hooks                    # Install git hooks (rebuilds binary on commit)
 ./streamctl init              # Initialize database
 ./streamctl serve             # Start MCP server
-./streamctl tui               # Launch TUI dashboard
 ./streamctl web               # Start web UI (auto-detects project)
 ./streamctl list              # List workstreams (JSON)
 ./streamctl export PROJECT/NAME          # Export single workstream to stdout
@@ -28,7 +27,6 @@ streamctl/                    # This repo
 ├── internal/
 │   ├── store/                # SQLite storage
 │   ├── mcp/                  # MCP server implementation
-│   ├── tui/                  # Terminal UI (bubbletea)
 │   └── web/                  # Web UI (HTML server)
 └── pkg/
     └── workstream/           # Core types and rendering
@@ -111,13 +109,6 @@ milestones ──references──> workstreams
 - Workstreams are independent entities that exist on their own
 - A workstream can be referenced by multiple milestones
 - Milestones are checkpoints/gates for tracking progress across workstreams
-
-## TUI Features
-
-- List all projects and workstreams
-- Filter by project, state, owner
-- View workstream details
-- Keyboard navigation (j/k, Enter, Esc, q)
 
 ## Environment
 
