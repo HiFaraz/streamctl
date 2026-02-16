@@ -125,6 +125,7 @@ Bugs are tasks with `is_bug=true`, stored on workstreams but queryable as top-le
 | `workstream` | string | Filter by workstream name |
 | `status` | string | Filter by status: pending, in_progress, done, skipped |
 | `reported_by` | string | Filter by reporter |
+| `severity` | string | Filter by severity: critical, normal, low |
 
 **bug_report Parameters:**
 
@@ -134,6 +135,7 @@ Bugs are tasks with `is_bug=true`, stored on workstreams but queryable as top-le
 | `workstream` | string | Workstream name (required) |
 | `description` | string | Bug description (required) |
 | `reported_by` | string | Who is reporting the bug (agent name) |
+| `severity` | string | Bug severity: critical, normal (default), low |
 
 **bug_update Parameters:**
 
@@ -142,6 +144,12 @@ Bugs are tasks with `is_bug=true`, stored on workstreams but queryable as top-le
 | `id` | number | Bug ID (required) |
 | `status` | string | New status: pending, in_progress, done, skipped |
 | `notes` | string | Bug notes (markdown) |
+| `severity` | string | Bug severity: critical, normal, low |
+
+**Severity levels:**
+- `critical` - Blocks workstream completion
+- `normal` - Standard bug, fix when able (default)
+- `low` - Minor issue, fix if time permits
 
 **Design:** Bugs live on workstreams (providing context) but can be queried and updated globally via `bug_list`/`bug_update`.
 

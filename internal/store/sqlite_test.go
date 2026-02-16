@@ -1180,6 +1180,41 @@ func TestUpdateBug(t *testing.T) {
 	}
 }
 
+func TestBugSeverity(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+
+	// Add bug with severity
+	s.AddBugWithSeverity("proj", "auth", "Critical bug", "agent-1", workstream.SeverityCritical)
+	s.AddBugWithSeverity("proj", "auth", "Normal bug", "agent-1", workstream.SeverityNormal)
+	s.AddBug("proj", "auth", "Default bug", "agent-1") // Should default to normal
+
+	bugs, _ := s.ListBugs(BugFilter{})
+	if len(bugs) != 3 {
+		t.Fatalf("Expected 3 bugs, got %d", len(bugs))
+	}
+
+	// Check severities (ordered by position)
+	if bugs[0].Severity != workstream.SeverityCritical {
+		t.Errorf("bugs[0].Severity = %q, want 'critical'", bugs[0].Severity)
+	}
+	if bugs[1].Severity != workstream.SeverityNormal {
+		t.Errorf("bugs[1].Severity = %q, want 'normal'", bugs[1].Severity)
+	}
+	if bugs[2].Severity != workstream.SeverityNormal {
+		t.Errorf("bugs[2].Severity = %q, want 'normal' (default)", bugs[2].Severity)
+	}
+
+	// Filter by severity
+	criticalBugs, _ := s.ListBugs(BugFilter{Severity: workstream.SeverityCritical})
+	if len(criticalBugs) != 1 {
+		t.Fatalf("Expected 1 critical bug, got %d", len(criticalBugs))
+	}
+}
+
 func ptrTaskStatus(s workstream.TaskStatus) *workstream.TaskStatus {
 	return &s
 }

@@ -159,6 +159,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithString("workstream", mcp.Description("Filter by workstream name")),
 			mcp.WithString("status", mcp.Description("Filter by status: pending, in_progress, done, skipped")),
 			mcp.WithString("reported_by", mcp.Description("Filter by reporter")),
+			mcp.WithString("severity", mcp.Description("Filter by severity: critical, normal, low")),
 		),
 		h.HandleBugList,
 	)
@@ -170,6 +171,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithString("workstream", mcp.Description("Workstream name"), mcp.Required()),
 			mcp.WithString("description", mcp.Description("Bug description"), mcp.Required()),
 			mcp.WithString("reported_by", mcp.Description("Who is reporting the bug (agent name)")),
+			mcp.WithString("severity", mcp.Description("Bug severity: critical, normal (default), low")),
 		),
 		h.HandleBugReport,
 	)
@@ -180,6 +182,7 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 			mcp.WithNumber("id", mcp.Description("Bug ID"), mcp.Required()),
 			mcp.WithString("status", mcp.Description("New status: pending, in_progress, done, skipped")),
 			mcp.WithString("notes", mcp.Description("Bug notes (markdown)")),
+			mcp.WithString("severity", mcp.Description("Bug severity: critical, normal, low")),
 		),
 		h.HandleBugUpdate,
 	)
@@ -607,12 +610,14 @@ func (h *Handlers) HandleBugList(ctx context.Context, req mcp.CallToolRequest) (
 	wsName := mcp.ParseString(req, "workstream", "")
 	status := mcp.ParseString(req, "status", "")
 	reportedBy := mcp.ParseString(req, "reported_by", "")
+	severity := mcp.ParseString(req, "severity", "")
 
 	filter := store.BugFilter{
 		Project:    project,
 		Workstream: wsName,
 		Status:     workstream.TaskStatus(status),
 		ReportedBy: reportedBy,
+		Severity:   workstream.Severity(severity),
 	}
 
 	bugs, err := h.store.ListBugs(filter)
@@ -625,6 +630,7 @@ func (h *Handlers) HandleBugList(ctx context.Context, req mcp.CallToolRequest) (
 		Position          int    `json:"position"`
 		Text              string `json:"text"`
 		Status            string `json:"status"`
+		Severity          string `json:"severity"`
 		ReportedBy        string `json:"reported_by,omitempty"`
 		WorkstreamProject string `json:"workstream_project"`
 		WorkstreamName    string `json:"workstream_name"`
@@ -637,6 +643,7 @@ func (h *Handlers) HandleBugList(ctx context.Context, req mcp.CallToolRequest) (
 			Position:          b.Position,
 			Text:              b.Text,
 			Status:            string(b.Status),
+			Severity:          string(b.Severity),
 			ReportedBy:        b.ReportedBy,
 			WorkstreamProject: b.WorkstreamProject,
 			WorkstreamName:    b.WorkstreamName,
@@ -653,16 +660,22 @@ func (h *Handlers) HandleBugReport(ctx context.Context, req mcp.CallToolRequest)
 	wsName := mcp.ParseString(req, "workstream", "")
 	description := mcp.ParseString(req, "description", "")
 	reportedBy := mcp.ParseString(req, "reported_by", "")
+	severity := mcp.ParseString(req, "severity", "")
 
 	if project == "" || wsName == "" || description == "" {
 		return mcp.NewToolResultError("project, workstream, and description are required"), nil
 	}
 
-	if err := h.store.AddBug(project, wsName, description, reportedBy); err != nil {
+	sev := workstream.SeverityNormal
+	if severity != "" {
+		sev = workstream.Severity(severity)
+	}
+
+	if err := h.store.AddBugWithSeverity(project, wsName, description, reportedBy, sev); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("Reported bug on %s/%s: %s", project, wsName, description)), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Reported %s bug on %s/%s: %s", sev, project, wsName, description)), nil
 }
 
 // HandleBugUpdate updates a bug by ID
@@ -670,6 +683,7 @@ func (h *Handlers) HandleBugUpdate(ctx context.Context, req mcp.CallToolRequest)
 	id := int64(mcp.ParseInt(req, "id", 0))
 	status := mcp.ParseString(req, "status", "")
 	notes := mcp.ParseString(req, "notes", "")
+	severity := mcp.ParseString(req, "severity", "")
 
 	if id == 0 {
 		return mcp.NewToolResultError("id is required"), nil
@@ -682,6 +696,10 @@ func (h *Handlers) HandleBugUpdate(ctx context.Context, req mcp.CallToolRequest)
 	}
 	if notes != "" {
 		update.Notes = &notes
+	}
+	if severity != "" {
+		sev := workstream.Severity(severity)
+		update.Severity = &sev
 	}
 
 	if err := h.store.UpdateBug(id, update); err != nil {

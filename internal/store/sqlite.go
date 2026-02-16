@@ -33,24 +33,27 @@ type BugFilter struct {
 	Workstream string
 	Status     workstream.TaskStatus
 	ReportedBy string
+	Severity   workstream.Severity
 }
 
 // Bug represents a bug with workstream context
 type Bug struct {
-	ID                 int64
-	Position           int
-	Text               string
-	Status             workstream.TaskStatus
-	Notes              string
-	ReportedBy         string
-	WorkstreamProject  string
-	WorkstreamName     string
+	ID                int64
+	Position          int
+	Text              string
+	Status            workstream.TaskStatus
+	Notes             string
+	ReportedBy        string
+	Severity          workstream.Severity
+	WorkstreamProject string
+	WorkstreamName    string
 }
 
 // BugUpdate for updating bug fields
 type BugUpdate struct {
-	Status *workstream.TaskStatus
-	Notes  *string
+	Status   *workstream.TaskStatus
+	Notes    *string
+	Severity *workstream.Severity
 }
 
 // Store provides SQLite-backed CRUD operations for workstreams
@@ -107,7 +110,8 @@ func (s *Store) migrate() error {
 		status TEXT NOT NULL DEFAULT 'pending',
 		notes TEXT NOT NULL DEFAULT '',
 		is_bug BOOLEAN DEFAULT FALSE,
-		reported_by TEXT NOT NULL DEFAULT ''
+		reported_by TEXT NOT NULL DEFAULT '',
+		severity TEXT NOT NULL DEFAULT 'normal'
 	);
 
 	CREATE TABLE IF NOT EXISTS log_entries (
@@ -190,6 +194,13 @@ func (s *Store) migrate() error {
 	// Migration: Add reported_by column to plan_items if missing
 	if !s.columnExists("plan_items", "reported_by") {
 		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN reported_by TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	// Migration: Add severity column to plan_items if missing
+	if !s.columnExists("plan_items", "severity") {
+		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN severity TEXT NOT NULL DEFAULT 'normal'`); err != nil {
 			return err
 		}
 	}
@@ -561,8 +572,13 @@ func (s *Store) AddTask(project, name, text string) error {
 	return err
 }
 
-// AddBug adds a new bug to a workstream
+// AddBug adds a new bug to a workstream with default severity
 func (s *Store) AddBug(project, name, text, reportedBy string) error {
+	return s.AddBugWithSeverity(project, name, text, reportedBy, workstream.SeverityNormal)
+}
+
+// AddBugWithSeverity adds a new bug with specified severity
+func (s *Store) AddBugWithSeverity(project, name, text, reportedBy string, severity workstream.Severity) error {
 	var wsID int64
 	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, project, name).Scan(&wsID)
 	if err != nil {
@@ -578,9 +594,9 @@ func (s *Store) AddBug(project, name, text, reportedBy string) error {
 	}
 
 	_, err = s.db.Exec(`
-		INSERT INTO plan_items (workstream_id, position, text, complete, status, is_bug, reported_by)
-		VALUES (?, ?, ?, FALSE, 'pending', TRUE, ?)`,
-		wsID, nextPos, text, reportedBy,
+		INSERT INTO plan_items (workstream_id, position, text, complete, status, is_bug, reported_by, severity)
+		VALUES (?, ?, ?, FALSE, 'pending', TRUE, ?, ?)`,
+		wsID, nextPos, text, reportedBy, string(severity),
 	)
 	if err != nil {
 		return err
@@ -593,7 +609,7 @@ func (s *Store) AddBug(project, name, text, reportedBy string) error {
 // ListBugs returns all bugs across workstreams matching the filter
 func (s *Store) ListBugs(filter BugFilter) ([]Bug, error) {
 	query := `
-		SELECT p.id, p.position, p.text, p.status, p.notes, p.reported_by, w.project, w.name
+		SELECT p.id, p.position, p.text, p.status, p.notes, p.reported_by, p.severity, w.project, w.name
 		FROM plan_items p
 		JOIN workstreams w ON p.workstream_id = w.id
 		WHERE p.is_bug = TRUE`
@@ -615,6 +631,10 @@ func (s *Store) ListBugs(filter BugFilter) ([]Bug, error) {
 		query += " AND p.reported_by = ?"
 		args = append(args, filter.ReportedBy)
 	}
+	if filter.Severity != "" {
+		query += " AND p.severity = ?"
+		args = append(args, string(filter.Severity))
+	}
 
 	query += " ORDER BY w.project, w.name, p.position"
 
@@ -627,7 +647,7 @@ func (s *Store) ListBugs(filter BugFilter) ([]Bug, error) {
 	var bugs []Bug
 	for rows.Next() {
 		var b Bug
-		if err := rows.Scan(&b.ID, &b.Position, &b.Text, &b.Status, &b.Notes, &b.ReportedBy, &b.WorkstreamProject, &b.WorkstreamName); err != nil {
+		if err := rows.Scan(&b.ID, &b.Position, &b.Text, &b.Status, &b.Notes, &b.ReportedBy, &b.Severity, &b.WorkstreamProject, &b.WorkstreamName); err != nil {
 			return nil, err
 		}
 		bugs = append(bugs, b)
@@ -658,6 +678,13 @@ func (s *Store) UpdateBug(id int64, update BugUpdate) error {
 
 	if update.Notes != nil {
 		_, err := s.db.Exec(`UPDATE plan_items SET notes = ? WHERE id = ?`, *update.Notes, id)
+		if err != nil {
+			return err
+		}
+	}
+
+	if update.Severity != nil {
+		_, err := s.db.Exec(`UPDATE plan_items SET severity = ? WHERE id = ?`, string(*update.Severity), id)
 		if err != nil {
 			return err
 		}

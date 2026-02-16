@@ -5,12 +5,13 @@
 ### Added
 
 - **Bug tracking**: Report, query, and update bugs across workstreams
-  - `bug_report(project, workstream, description, reported_by?)` - Report a bug on a workstream
-  - `bug_list(project?, workstream?, status?, reported_by?)` - List all bugs with optional filters
-  - `bug_update(id, status?, notes?)` - Update bug status or notes by ID
+  - `bug_report(project, workstream, description, reported_by?, severity?)` - Report a bug
+  - `bug_list(project?, workstream?, status?, reported_by?, severity?)` - List/filter bugs
+  - `bug_update(id, status?, notes?, severity?)` - Update bug by ID
+  - **Severity levels**: `critical` (blocks completion), `normal` (default), `low` (minor)
   - Bugs are stored as tasks with `is_bug=true`, providing workstream context
   - Design: stored nested (on workstreams), queryable/updatable as top-level objects
-  - Schema: Added `is_bug` and `reported_by` columns to `plan_items` table
+  - Schema: Added `is_bug`, `reported_by`, `severity` columns to `plan_items` table
 
 - **Milestone deletion**: `milestone_delete(project, name)` removes a milestone
   - Workstreams are NOT deleted - milestones are groupings that reference workstreams, not owners

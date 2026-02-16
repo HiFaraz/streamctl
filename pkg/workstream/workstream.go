@@ -22,6 +22,15 @@ const (
 	TaskSkipped    TaskStatus = "skipped"
 )
 
+// Severity represents bug severity level
+type Severity string
+
+const (
+	SeverityCritical Severity = "critical" // Blocks workstream completion
+	SeverityNormal   Severity = "normal"   // Standard bug, fix when able
+	SeverityLow      Severity = "low"      // Minor issue, fix if time permits
+)
+
 // PlanItem represents a single item in the workstream plan
 type PlanItem struct {
 	Text       string
