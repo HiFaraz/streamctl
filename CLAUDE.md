@@ -36,7 +36,7 @@ streamctl/                    # This repo
 
 ```sql
 workstreams (id, project, name, state, owner, objective, needs_help, last_update, created_at)
-plan_items (id, workstream_id, position, text, complete, status, notes, is_bug, reported_by)
+plan_items (id, workstream_id, position, text, complete, status, notes, is_bug, reported_by, severity)
 log_entries (id, workstream_id, timestamp, content)
 workstream_dependencies (blocker_id, blocked_id, created_at)
 milestones (id, project, name, description, created_at)
@@ -61,7 +61,7 @@ milestone_requirements (milestone_id, workstream_id)
 | `milestone_delete` | Delete a milestone (workstreams are NOT deleted) |
 | `bug_list` | List all bugs across workstreams, filter by project/workstream/status/reporter |
 | `bug_report` | Report a bug on a workstream |
-| `bug_update` | Update a bug by ID (status, notes) |
+| `bug_update` | Update a bug by ID (status, notes, severity) |
 
 ### workstream_update Parameters
 
