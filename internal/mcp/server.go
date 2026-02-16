@@ -173,6 +173,16 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 		),
 		h.HandleBugReport,
 	)
+
+	s.AddTool(
+		mcp.NewTool("bug_update",
+			mcp.WithDescription("Update a bug by ID"),
+			mcp.WithNumber("id", mcp.Description("Bug ID"), mcp.Required()),
+			mcp.WithString("status", mcp.Description("New status: pending, in_progress, done, skipped")),
+			mcp.WithString("notes", mcp.Description("Bug notes (markdown)")),
+		),
+		h.HandleBugUpdate,
+	)
 }
 
 // HandleList lists workstreams with optional filters
@@ -653,6 +663,32 @@ func (h *Handlers) HandleBugReport(ctx context.Context, req mcp.CallToolRequest)
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Reported bug on %s/%s: %s", project, wsName, description)), nil
+}
+
+// HandleBugUpdate updates a bug by ID
+func (h *Handlers) HandleBugUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := int64(mcp.ParseInt(req, "id", 0))
+	status := mcp.ParseString(req, "status", "")
+	notes := mcp.ParseString(req, "notes", "")
+
+	if id == 0 {
+		return mcp.NewToolResultError("id is required"), nil
+	}
+
+	update := store.BugUpdate{}
+	if status != "" {
+		s := workstream.TaskStatus(status)
+		update.Status = &s
+	}
+	if notes != "" {
+		update.Notes = &notes
+	}
+
+	if err := h.store.UpdateBug(id, update); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Updated bug %d", id)), nil
 }
 
 // NewServer creates a new MCP server with workstream tools

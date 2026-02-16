@@ -715,3 +715,35 @@ func TestHandleBugReport(t *testing.T) {
 		t.Error("Bug was not added to workstream")
 	}
 }
+
+func TestHandleBugUpdate(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	// Add a bug first
+	st.AddBug("testproject", "Feature One", "Test bug", "agent-1")
+	bugs, _ := st.ListBugs(store.BugFilter{})
+	bugID := bugs[0].ID
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"id":     float64(bugID),
+				"status": "done",
+			},
+		},
+	}
+	result, err := h.HandleBugUpdate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleBugUpdate() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleBugUpdate() returned error: %v", result.Content)
+	}
+
+	// Verify bug was updated
+	bugs, _ = st.ListBugs(store.BugFilter{})
+	if bugs[0].Status != "done" {
+		t.Errorf("Bug status = %q, want 'done'", bugs[0].Status)
+	}
+}

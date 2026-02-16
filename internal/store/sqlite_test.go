@@ -1152,3 +1152,35 @@ func TestListBugsWithFilter(t *testing.T) {
 	}
 }
 
+func TestUpdateBug(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.AddBug("proj", "auth", "Token bug", "agent-1")
+
+	// Get the bug ID
+	bugs, _ := s.ListBugs(BugFilter{})
+	if len(bugs) != 1 {
+		t.Fatalf("Expected 1 bug, got %d", len(bugs))
+	}
+	bugID := bugs[0].ID
+
+	// Update status to done
+	err := s.UpdateBug(bugID, BugUpdate{Status: ptrTaskStatus(workstream.TaskDone)})
+	if err != nil {
+		t.Fatalf("UpdateBug() error = %v", err)
+	}
+
+	// Verify
+	bugs, _ = s.ListBugs(BugFilter{})
+	if bugs[0].Status != workstream.TaskDone {
+		t.Errorf("Bug status = %q, want 'done'", bugs[0].Status)
+	}
+}
+
+func ptrTaskStatus(s workstream.TaskStatus) *workstream.TaskStatus {
+	return &s
+}
+

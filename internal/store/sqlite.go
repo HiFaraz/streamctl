@@ -47,6 +47,12 @@ type Bug struct {
 	WorkstreamName     string
 }
 
+// BugUpdate for updating bug fields
+type BugUpdate struct {
+	Status *workstream.TaskStatus
+	Notes  *string
+}
+
 // Store provides SQLite-backed CRUD operations for workstreams
 type Store struct {
 	db *sql.DB
@@ -627,6 +633,42 @@ func (s *Store) ListBugs(filter BugFilter) ([]Bug, error) {
 		bugs = append(bugs, b)
 	}
 	return bugs, nil
+}
+
+// UpdateBug updates a bug by its ID
+func (s *Store) UpdateBug(id int64, update BugUpdate) error {
+	// First verify it's a bug
+	var isBug bool
+	err := s.db.QueryRow(`SELECT is_bug FROM plan_items WHERE id = ?`, id).Scan(&isBug)
+	if err != nil {
+		return err
+	}
+	if !isBug {
+		return fmt.Errorf("item %d is not a bug", id)
+	}
+
+	if update.Status != nil {
+		complete := *update.Status == workstream.TaskDone
+		_, err := s.db.Exec(`UPDATE plan_items SET status = ?, complete = ? WHERE id = ?`,
+			string(*update.Status), complete, id)
+		if err != nil {
+			return err
+		}
+	}
+
+	if update.Notes != nil {
+		_, err := s.db.Exec(`UPDATE plan_items SET notes = ? WHERE id = ?`, *update.Notes, id)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update workstream last_update
+	_, err = s.db.Exec(`
+		UPDATE workstreams SET last_update = ?
+		WHERE id = (SELECT workstream_id FROM plan_items WHERE id = ?)`,
+		time.Now().UTC(), id)
+	return err
 }
 
 // RemoveTask removes a task at the given position and reorders remaining tasks

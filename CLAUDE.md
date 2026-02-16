@@ -61,6 +61,7 @@ milestone_requirements (milestone_id, workstream_id)
 | `milestone_delete` | Delete a milestone (workstreams are NOT deleted) |
 | `bug_list` | List all bugs across workstreams, filter by project/workstream/status/reporter |
 | `bug_report` | Report a bug on a workstream |
+| `bug_update` | Update a bug by ID (status, notes) |
 
 ### workstream_update Parameters
 
@@ -134,7 +135,15 @@ Bugs are tasks with `is_bug=true`, stored on workstreams but queryable as top-le
 | `description` | string | Bug description (required) |
 | `reported_by` | string | Who is reporting the bug (agent name) |
 
-**Design:** Bugs live on workstreams (providing context) but can be queried globally via `bug_list`.
+**bug_update Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | number | Bug ID (required) |
+| `status` | string | New status: pending, in_progress, done, skipped |
+| `notes` | string | Bug notes (markdown) |
+
+**Design:** Bugs live on workstreams (providing context) but can be queried and updated globally via `bug_list`/`bug_update`.
 
 ## Environment
 
