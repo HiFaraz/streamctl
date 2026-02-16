@@ -79,23 +79,46 @@ Common inconsistencies to check:
 - Parameter names/types match
 - New features mentioned in changelog are also in CLAUDE.md files
 
-### 7. Report
+### 7. Commit and Push
+
+If documentation was updated, commit all changes:
+
+```bash
+git add -A
+git status
+```
+
+Commit with a descriptive message summarizing the release prep:
+
+```bash
+git commit -m "Release prep: update docs for <feature summary>
+
+- Updated CLAUDE.md with <changes>
+- Updated CHANGELOG.md with <changes>
+- Updated global CLAUDE.md with <changes>
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+Push to remote:
+
+```bash
+git push
+```
+
+### 8. Report
 
 Summarize:
 
 1. **Build status**: Pass/Fail
 2. **Test status**: X tests passed
 3. **Documentation updates made**: List any changes
-4. **Ready for release**: Yes/No
-
-If ready, the user can then:
-- Bump version in `cmd/streamctl/main.go`
-- Move `## Unreleased` to `## X.Y.Z` in CHANGELOG.md
-- Commit, tag, and push
+4. **Commit**: Show commit hash if committed
+5. **Push status**: Pushed/Not pushed
 
 ## Notes
 
-- This command does NOT create git commits or tags
+- This command commits and pushes documentation updates
+- This command does NOT create git tags or GitHub releases
 - This command does NOT bump version numbers
-- This is a pre-release checklist, not an automated release
 - The user decides when to actually tag and release
