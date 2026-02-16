@@ -716,6 +716,57 @@ func TestHandleBugReport(t *testing.T) {
 	}
 }
 
+func TestHandleListTruncatesLongObjectives(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	// Create workstream with very long objective (500+ chars)
+	longObjective := strings.Repeat("This is a long objective. ", 50) // ~1250 chars
+	st.Create(&workstream.Workstream{
+		Name:       "long-objective-feature",
+		Project:    "testproject",
+		State:      workstream.StatePending,
+		Objective:  longObjective,
+		LastUpdate: time.Now(),
+	})
+
+	h := NewHandlers(st)
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "testproject",
+			},
+		},
+	}
+	result, err := h.HandleList(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleList() error = %v", err)
+	}
+
+	content := result.Content[0].(mcp.TextContent).Text
+
+	// Objective should be truncated to ~100 chars + ellipsis
+	if strings.Contains(content, longObjective) {
+		t.Error("HandleList() should truncate long objectives, but returned full objective")
+	}
+	// Should contain truncated version with ellipsis
+	if !strings.Contains(content, "...") {
+		t.Error("HandleList() should add ellipsis to truncated objectives")
+	}
+	// Should be reasonably short (under 150 chars for objective field)
+	if len(content) > 500 {
+		// Content includes JSON structure, so total can be larger
+		// but we're checking the objective isn't the full 1250 chars
+		if strings.Contains(content, "objective. This is a long objective. This is a long objective. This is a long objective. This is a long objective. This is a long objective.") {
+			t.Error("HandleList() objective is too long, should be truncated")
+		}
+	}
+}
+
 func TestHandleBugUpdate(t *testing.T) {
 	st := setupTestStore(t)
 	h := NewHandlers(st)

@@ -223,7 +223,7 @@ func (h *Handlers) HandleList(ctx context.Context, req mcp.CallToolRequest) (*mc
 			State:      string(ws.State),
 			LastUpdate: ws.LastUpdate.Format("2006-01-02 15:04"),
 			Owner:      ws.Owner,
-			Objective:  ws.Objective,
+			Objective:  truncate(ws.Objective, 100),
 		}
 	}
 
@@ -715,4 +715,12 @@ func NewServer(st *store.Store) *server.MCPServer {
 	h := NewHandlers(st)
 	h.RegisterTools(s)
 	return s
+}
+
+// truncate shortens a string to maxLen characters, adding "..." if truncated
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

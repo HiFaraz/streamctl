@@ -39,6 +39,8 @@
 
 - **Objective field description**: Changed from "One-sentence objective" to "Objective and context for this workstream" to allow richer content at creation time
 
+- **Truncated objectives in list output**: `workstream_list` now truncates objectives to 100 characters to reduce context usage. Use `workstream_get` for the full objective.
+
 - **Cross-workstream milestones**: Define gates that require multiple workstreams to complete
   - `milestone_create(project, name, description?)` - Create a milestone
   - `milestone_get(project, name)` - Get milestone with computed status and requirements list
