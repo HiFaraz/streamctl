@@ -27,6 +27,26 @@ type WorkstreamUpdate struct {
 	NeedsHelp *bool   // Flag for at-risk/stuck workstreams
 }
 
+// BugFilter for listing bugs
+type BugFilter struct {
+	Project    string
+	Workstream string
+	Status     workstream.TaskStatus
+	ReportedBy string
+}
+
+// Bug represents a bug with workstream context
+type Bug struct {
+	ID                 int64
+	Position           int
+	Text               string
+	Status             workstream.TaskStatus
+	Notes              string
+	ReportedBy         string
+	WorkstreamProject  string
+	WorkstreamName     string
+}
+
 // Store provides SQLite-backed CRUD operations for workstreams
 type Store struct {
 	db *sql.DB
@@ -79,7 +99,9 @@ func (s *Store) migrate() error {
 		text TEXT NOT NULL,
 		complete BOOLEAN DEFAULT FALSE,
 		status TEXT NOT NULL DEFAULT 'pending',
-		notes TEXT NOT NULL DEFAULT ''
+		notes TEXT NOT NULL DEFAULT '',
+		is_bug BOOLEAN DEFAULT FALSE,
+		reported_by TEXT NOT NULL DEFAULT ''
 	);
 
 	CREATE TABLE IF NOT EXISTS log_entries (
@@ -148,6 +170,20 @@ func (s *Store) migrate() error {
 	// Migration: Add needs_help column to workstreams if missing
 	if !s.columnExists("workstreams", "needs_help") {
 		if _, err := s.db.Exec(`ALTER TABLE workstreams ADD COLUMN needs_help BOOLEAN DEFAULT FALSE`); err != nil {
+			return err
+		}
+	}
+
+	// Migration: Add is_bug column to plan_items if missing
+	if !s.columnExists("plan_items", "is_bug") {
+		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN is_bug BOOLEAN DEFAULT FALSE`); err != nil {
+			return err
+		}
+	}
+
+	// Migration: Add reported_by column to plan_items if missing
+	if !s.columnExists("plan_items", "reported_by") {
+		if _, err := s.db.Exec(`ALTER TABLE plan_items ADD COLUMN reported_by TEXT NOT NULL DEFAULT ''`); err != nil {
 			return err
 		}
 	}
@@ -252,7 +288,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 
 	// Load plan items
 	rows, err := s.db.Query(`
-		SELECT text, complete, status, notes FROM plan_items
+		SELECT text, complete, status, notes, is_bug, reported_by FROM plan_items
 		WHERE workstream_id = ? ORDER BY position`,
 		wsID,
 	)
@@ -263,7 +299,7 @@ func (s *Store) Get(project, name string) (*workstream.Workstream, error) {
 
 	for rows.Next() {
 		var item workstream.PlanItem
-		if err := rows.Scan(&item.Text, &item.Complete, &item.Status, &item.Notes); err != nil {
+		if err := rows.Scan(&item.Text, &item.Complete, &item.Status, &item.Notes, &item.IsBug, &item.ReportedBy); err != nil {
 			return nil, err
 		}
 		ws.Plan = append(ws.Plan, item)
@@ -385,13 +421,13 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 		}
 
 		// Load plan items
-		planRows, err := s.db.Query(`SELECT text, complete, status, notes FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
+		planRows, err := s.db.Query(`SELECT text, complete, status, notes, is_bug, reported_by FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
 		if err != nil {
 			return nil, err
 		}
 		for planRows.Next() {
 			var item workstream.PlanItem
-			planRows.Scan(&item.Text, &item.Complete, &item.Status, &item.Notes)
+			planRows.Scan(&item.Text, &item.Complete, &item.Status, &item.Notes, &item.IsBug, &item.ReportedBy)
 			ws.Plan = append(ws.Plan, item)
 		}
 		planRows.Close()
@@ -517,6 +553,80 @@ func (s *Store) AddTask(project, name, text string) error {
 
 	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
 	return err
+}
+
+// AddBug adds a new bug to a workstream
+func (s *Store) AddBug(project, name, text, reportedBy string) error {
+	var wsID int64
+	err := s.db.QueryRow(`SELECT id FROM workstreams WHERE project = ? AND name = ?`, project, name).Scan(&wsID)
+	if err != nil {
+		return err
+	}
+
+	// Get next position
+	var maxPos sql.NullInt64
+	s.db.QueryRow(`SELECT MAX(position) FROM plan_items WHERE workstream_id = ?`, wsID).Scan(&maxPos)
+	nextPos := 0
+	if maxPos.Valid {
+		nextPos = int(maxPos.Int64) + 1
+	}
+
+	_, err = s.db.Exec(`
+		INSERT INTO plan_items (workstream_id, position, text, complete, status, is_bug, reported_by)
+		VALUES (?, ?, ?, FALSE, 'pending', TRUE, ?)`,
+		wsID, nextPos, text, reportedBy,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE workstreams SET last_update = ? WHERE id = ?`, time.Now().UTC(), wsID)
+	return err
+}
+
+// ListBugs returns all bugs across workstreams matching the filter
+func (s *Store) ListBugs(filter BugFilter) ([]Bug, error) {
+	query := `
+		SELECT p.id, p.position, p.text, p.status, p.notes, p.reported_by, w.project, w.name
+		FROM plan_items p
+		JOIN workstreams w ON p.workstream_id = w.id
+		WHERE p.is_bug = TRUE`
+	args := []interface{}{}
+
+	if filter.Project != "" {
+		query += " AND w.project = ?"
+		args = append(args, filter.Project)
+	}
+	if filter.Workstream != "" {
+		query += " AND w.name = ?"
+		args = append(args, filter.Workstream)
+	}
+	if filter.Status != "" {
+		query += " AND p.status = ?"
+		args = append(args, string(filter.Status))
+	}
+	if filter.ReportedBy != "" {
+		query += " AND p.reported_by = ?"
+		args = append(args, filter.ReportedBy)
+	}
+
+	query += " ORDER BY w.project, w.name, p.position"
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var bugs []Bug
+	for rows.Next() {
+		var b Bug
+		if err := rows.Scan(&b.ID, &b.Position, &b.Text, &b.Status, &b.Notes, &b.ReportedBy, &b.WorkstreamProject, &b.WorkstreamName); err != nil {
+			return nil, err
+		}
+		bugs = append(bugs, b)
+	}
+	return bugs, nil
 }
 
 // RemoveTask removes a task at the given position and reorders remaining tasks

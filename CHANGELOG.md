@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Bug tracking**: Report and query bugs across workstreams
+  - `bug_report(project, workstream, description, reported_by?)` - Report a bug on a workstream
+  - `bug_list(project?, workstream?, status?, reported_by?)` - List all bugs with optional filters
+  - Bugs are stored as tasks with `is_bug=true`, providing workstream context
+  - Design: stored nested (on workstreams), queryable as top-level objects
+  - Schema: Added `is_bug` and `reported_by` columns to `plan_items` table
+
 - **Milestone deletion**: `milestone_delete(project, name)` removes a milestone
   - Workstreams are NOT deleted - milestones are groupings that reference workstreams, not owners
   - Documentation clarified to explain the milestone-workstream relationship

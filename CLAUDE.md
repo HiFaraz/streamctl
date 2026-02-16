@@ -36,7 +36,7 @@ streamctl/                    # This repo
 
 ```sql
 workstreams (id, project, name, state, owner, objective, needs_help, last_update, created_at)
-plan_items (id, workstream_id, position, text, complete, status, notes)
+plan_items (id, workstream_id, position, text, complete, status, notes, is_bug, reported_by)
 log_entries (id, workstream_id, timestamp, content)
 workstream_dependencies (blocker_id, blocked_id, created_at)
 milestones (id, project, name, description, created_at)
@@ -59,6 +59,8 @@ milestone_requirements (milestone_id, workstream_id)
 | `milestone_list` | List milestones with computed status |
 | `milestone_update` | Add/remove requirements, update description |
 | `milestone_delete` | Delete a milestone (workstreams are NOT deleted) |
+| `bug_list` | List all bugs across workstreams, filter by project/workstream/status/reporter |
+| `bug_report` | Report a bug on a workstream |
 
 ### workstream_update Parameters
 
@@ -109,6 +111,30 @@ milestones ──references──> workstreams
 - Workstreams are independent entities that exist on their own
 - A workstream can be referenced by multiple milestones
 - Milestones are checkpoints/gates for tracking progress across workstreams
+
+### Bug Tracking
+
+Bugs are tasks with `is_bug=true`, stored on workstreams but queryable as top-level objects.
+
+**bug_list Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `project` | string | Filter by project name |
+| `workstream` | string | Filter by workstream name |
+| `status` | string | Filter by status: pending, in_progress, done, skipped |
+| `reported_by` | string | Filter by reporter |
+
+**bug_report Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `project` | string | Project name (required) |
+| `workstream` | string | Workstream name (required) |
+| `description` | string | Bug description (required) |
+| `reported_by` | string | Who is reporting the bug (agent name) |
+
+**Design:** Bugs live on workstreams (providing context) but can be queried globally via `bug_list`.
 
 ## Environment
 

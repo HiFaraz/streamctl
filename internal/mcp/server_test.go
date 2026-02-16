@@ -652,3 +652,66 @@ func TestHandleMilestoneDelete_NotFound(t *testing.T) {
 		t.Error("HandleMilestoneDelete() should return error for non-existent milestone")
 	}
 }
+
+func TestHandleBugList(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	// Add bugs to the test workstreams
+	st.AddBug("testproject", "Feature One", "Bug in feature one", "agent-1")
+	st.AddBug("testproject", "Feature Two", "Bug in feature two", "agent-2")
+
+	req := mcp.CallToolRequest{}
+	result, err := h.HandleBugList(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleBugList() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleBugList() returned error result")
+	}
+
+	// Result should contain JSON with both bugs
+	content := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(content, "Bug in feature one") {
+		t.Error("HandleBugList() should return 'Bug in feature one'")
+	}
+	if !strings.Contains(content, "Bug in feature two") {
+		t.Error("HandleBugList() should return 'Bug in feature two'")
+	}
+}
+
+func TestHandleBugReport(t *testing.T) {
+	st := setupTestStore(t)
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":     "testproject",
+				"workstream":  "Feature One",
+				"description": "Auth token not refreshed",
+				"reported_by": "review-agent",
+			},
+		},
+	}
+	result, err := h.HandleBugReport(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleBugReport() error = %v", err)
+	}
+	if result.IsError {
+		t.Errorf("HandleBugReport() returned error result")
+	}
+
+	// Verify bug was added
+	ws, _ := st.Get("testproject", "Feature One")
+	found := false
+	for _, item := range ws.Plan {
+		if item.IsBug && item.Text == "Auth token not refreshed" && item.ReportedBy == "review-agent" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Bug was not added to workstream")
+	}
+}

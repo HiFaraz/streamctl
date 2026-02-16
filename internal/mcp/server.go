@@ -151,6 +151,28 @@ func (h *Handlers) RegisterTools(s *server.MCPServer) {
 		),
 		h.HandleMilestoneDelete,
 	)
+
+	s.AddTool(
+		mcp.NewTool("bug_list",
+			mcp.WithDescription("List all bugs across workstreams"),
+			mcp.WithString("project", mcp.Description("Filter by project name")),
+			mcp.WithString("workstream", mcp.Description("Filter by workstream name")),
+			mcp.WithString("status", mcp.Description("Filter by status: pending, in_progress, done, skipped")),
+			mcp.WithString("reported_by", mcp.Description("Filter by reporter")),
+		),
+		h.HandleBugList,
+	)
+
+	s.AddTool(
+		mcp.NewTool("bug_report",
+			mcp.WithDescription("Report a bug on a workstream"),
+			mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+			mcp.WithString("workstream", mcp.Description("Workstream name"), mcp.Required()),
+			mcp.WithString("description", mcp.Description("Bug description"), mcp.Required()),
+			mcp.WithString("reported_by", mcp.Description("Who is reporting the bug (agent name)")),
+		),
+		h.HandleBugReport,
+	)
 }
 
 // HandleList lists workstreams with optional filters
@@ -567,6 +589,70 @@ func (h *Handlers) HandleMilestoneDelete(ctx context.Context, req mcp.CallToolRe
 	}
 
 	return mcp.NewToolResultText("Deleted milestone: " + project + "/" + name), nil
+}
+
+// HandleBugList lists bugs across workstreams
+func (h *Handlers) HandleBugList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	wsName := mcp.ParseString(req, "workstream", "")
+	status := mcp.ParseString(req, "status", "")
+	reportedBy := mcp.ParseString(req, "reported_by", "")
+
+	filter := store.BugFilter{
+		Project:    project,
+		Workstream: wsName,
+		Status:     workstream.TaskStatus(status),
+		ReportedBy: reportedBy,
+	}
+
+	bugs, err := h.store.ListBugs(filter)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	type bugSummary struct {
+		ID                int64  `json:"id"`
+		Position          int    `json:"position"`
+		Text              string `json:"text"`
+		Status            string `json:"status"`
+		ReportedBy        string `json:"reported_by,omitempty"`
+		WorkstreamProject string `json:"workstream_project"`
+		WorkstreamName    string `json:"workstream_name"`
+	}
+
+	summaries := make([]bugSummary, len(bugs))
+	for i, b := range bugs {
+		summaries[i] = bugSummary{
+			ID:                b.ID,
+			Position:          b.Position,
+			Text:              b.Text,
+			Status:            string(b.Status),
+			ReportedBy:        b.ReportedBy,
+			WorkstreamProject: b.WorkstreamProject,
+			WorkstreamName:    b.WorkstreamName,
+		}
+	}
+
+	data, _ := json.MarshalIndent(summaries, "", "  ")
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+// HandleBugReport reports a bug on a workstream
+func (h *Handlers) HandleBugReport(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	wsName := mcp.ParseString(req, "workstream", "")
+	description := mcp.ParseString(req, "description", "")
+	reportedBy := mcp.ParseString(req, "reported_by", "")
+
+	if project == "" || wsName == "" || description == "" {
+		return mcp.NewToolResultError("project, workstream, and description are required"), nil
+	}
+
+	if err := h.store.AddBug(project, wsName, description, reportedBy); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Reported bug on %s/%s: %s", project, wsName, description)), nil
 }
 
 // NewServer creates a new MCP server with workstream tools

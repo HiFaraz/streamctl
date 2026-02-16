@@ -1051,3 +1051,104 @@ func TestMigrateLogNewlines(t *testing.T) {
 	}
 }
 
+func TestAddBug(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{
+		Name:    "Bug Test",
+		Project: "proj",
+		State:   workstream.StatePending,
+	})
+
+	// Add a bug
+	err := s.AddBug("proj", "Bug Test", "Auth token not refreshed", "review-agent")
+	if err != nil {
+		t.Fatalf("AddBug() error = %v", err)
+	}
+
+	got, _ := s.Get("proj", "Bug Test")
+	if len(got.Plan) != 1 {
+		t.Fatalf("Plan length = %d, want 1", len(got.Plan))
+	}
+	if !got.Plan[0].IsBug {
+		t.Error("Plan[0].IsBug = false, want true")
+	}
+	if got.Plan[0].Text != "Auth token not refreshed" {
+		t.Errorf("Plan[0].Text = %q, want 'Auth token not refreshed'", got.Plan[0].Text)
+	}
+	if got.Plan[0].ReportedBy != "review-agent" {
+		t.Errorf("Plan[0].ReportedBy = %q, want 'review-agent'", got.Plan[0].ReportedBy)
+	}
+}
+
+func TestListBugs(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create two workstreams
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj", State: workstream.StatePending})
+
+	// Add bugs to both
+	s.AddBug("proj", "auth", "Token refresh fails", "agent-1")
+	s.AddBug("proj", "api", "Rate limiter broken", "agent-2")
+
+	// Add a regular task (not a bug)
+	s.AddTask("proj", "auth", "Implement logout")
+
+	// List all bugs
+	bugs, err := s.ListBugs(BugFilter{})
+	if err != nil {
+		t.Fatalf("ListBugs() error = %v", err)
+	}
+
+	if len(bugs) != 2 {
+		t.Fatalf("ListBugs() returned %d bugs, want 2", len(bugs))
+	}
+
+	// Verify bugs have workstream context (order by name: api, auth)
+	if bugs[0].WorkstreamProject != "proj" {
+		t.Errorf("bugs[0].WorkstreamProject = %q, want 'proj'", bugs[0].WorkstreamProject)
+	}
+	if bugs[0].WorkstreamName != "api" {
+		t.Errorf("bugs[0].WorkstreamName = %q, want 'api'", bugs[0].WorkstreamName)
+	}
+	if bugs[1].WorkstreamName != "auth" {
+		t.Errorf("bugs[1].WorkstreamName = %q, want 'auth'", bugs[1].WorkstreamName)
+	}
+}
+
+func TestListBugsWithFilter(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams in two projects
+	s.Create(&workstream.Workstream{Name: "auth", Project: "proj1", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api", Project: "proj2", State: workstream.StatePending})
+
+	s.AddBug("proj1", "auth", "Bug in proj1", "agent-1")
+	s.AddBug("proj2", "api", "Bug in proj2", "agent-2")
+
+	// Filter by project
+	bugs, _ := s.ListBugs(BugFilter{Project: "proj1"})
+	if len(bugs) != 1 {
+		t.Fatalf("ListBugs(project=proj1) returned %d bugs, want 1", len(bugs))
+	}
+	if bugs[0].Text != "Bug in proj1" {
+		t.Errorf("bugs[0].Text = %q, want 'Bug in proj1'", bugs[0].Text)
+	}
+
+	// Filter by reporter
+	bugs, _ = s.ListBugs(BugFilter{ReportedBy: "agent-2"})
+	if len(bugs) != 1 {
+		t.Fatalf("ListBugs(reportedBy=agent-2) returned %d bugs, want 1", len(bugs))
+	}
+	if bugs[0].ReportedBy != "agent-2" {
+		t.Errorf("bugs[0].ReportedBy = %q, want 'agent-2'", bugs[0].ReportedBy)
+	}
+}
+

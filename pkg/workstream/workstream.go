@@ -24,10 +24,12 @@ const (
 
 // PlanItem represents a single item in the workstream plan
 type PlanItem struct {
-	Text     string
-	Status   TaskStatus
-	Notes    string // Markdown-formatted notes (code snippets, details, links)
-	Complete bool   // Deprecated: use Status instead
+	Text       string
+	Status     TaskStatus
+	Notes      string // Markdown-formatted notes (code snippets, details, links)
+	Complete   bool   // Deprecated: use Status instead
+	IsBug      bool   // True if this task is a bug report
+	ReportedBy string // Who reported the bug (agent name)
 }
 
 // LogEntry represents a timestamped log entry
