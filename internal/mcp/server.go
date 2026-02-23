@@ -29,10 +29,13 @@ func NewHandlers(st *store.Store) *Handlers {
 func (h *Handlers) RegisterTools(s *server.MCPServer) {
 	s.AddTool(
 		mcp.NewTool("workstream_list",
-			mcp.WithDescription("List workstreams with optional filters"),
+			mcp.WithDescription("List workstreams with optional filters. Returns most recent first with cursor-based pagination."),
 			mcp.WithString("project", mcp.Description("Filter by project name")),
 			mcp.WithString("state", mcp.Description("Filter by state: pending, in_progress, blocked, done")),
 			mcp.WithString("owner", mcp.Description("Filter by owner")),
+			mcp.WithString("name_contains", mcp.Description("Filter by substring in workstream name (case-insensitive)")),
+			mcp.WithNumber("limit", mcp.Description("Max results to return (default 20)")),
+			mcp.WithString("cursor", mcp.Description("Cursor for next page (from previous response)")),
 		),
 		h.HandleList,
 	)
@@ -193,20 +196,27 @@ func (h *Handlers) HandleList(ctx context.Context, req mcp.CallToolRequest) (*mc
 	project := mcp.ParseString(req, "project", "")
 	state := mcp.ParseString(req, "state", "")
 	owner := mcp.ParseString(req, "owner", "")
+	nameContains := mcp.ParseString(req, "name_contains", "")
+	limit := mcp.ParseInt(req, "limit", 20)
+	cursor := mcp.ParseString(req, "cursor", "")
 
 	filter := store.Filter{
-		Project: project,
-		State:   workstream.State(state),
-		Owner:   owner,
+		Project:      project,
+		State:        workstream.State(state),
+		Owner:        owner,
+		NameContains: nameContains,
+		Limit:        limit,
+		Cursor:       cursor,
 	}
 
-	workstreams, err := h.store.List(filter)
+	result, err := h.store.List(filter)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Convert to summary format
+	// Convert to summary format with pagination
 	type wsSummary struct {
+		ID         int64  `json:"id"`
 		Project    string `json:"project"`
 		Name       string `json:"name"`
 		State      string `json:"state"`
@@ -215,9 +225,16 @@ func (h *Handlers) HandleList(ctx context.Context, req mcp.CallToolRequest) (*mc
 		Objective  string `json:"objective"`
 	}
 
-	summaries := make([]wsSummary, len(workstreams))
-	for i, ws := range workstreams {
+	type listResponse struct {
+		Workstreams []wsSummary `json:"workstreams"`
+		Total       int         `json:"total"`
+		NextCursor  string      `json:"next_cursor,omitempty"`
+	}
+
+	summaries := make([]wsSummary, len(result.Workstreams))
+	for i, ws := range result.Workstreams {
 		summaries[i] = wsSummary{
+			ID:         ws.ID,
 			Project:    ws.Project,
 			Name:       ws.Name,
 			State:      string(ws.State),
@@ -227,7 +244,13 @@ func (h *Handlers) HandleList(ctx context.Context, req mcp.CallToolRequest) (*mc
 		}
 	}
 
-	data, _ := json.MarshalIndent(summaries, "", "  ")
+	response := listResponse{
+		Workstreams: summaries,
+		Total:       result.Total,
+		NextCursor:  result.NextCursor,
+	}
+
+	data, _ := json.MarshalIndent(response, "", "  ")
 	return mcp.NewToolResultText(string(data)), nil
 }
 

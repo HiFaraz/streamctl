@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Cursor-based pagination for workstream_list**: Large workstream lists now paginate efficiently
+  - `limit` parameter (default 20) controls page size
+  - `cursor` parameter for fetching next page
+  - Response includes `total` count and `next_cursor` for continuation
+  - Results ordered by `last_update DESC` (most recent first)
+  - Each workstream includes `id` field for cursor tracking
+
+- **Workstream name search**: Find workstreams by name substring
+  - `name_contains` parameter for case-insensitive substring matching
+  - Example: `workstream_list(project="myapp", name_contains="auth")` finds all auth-related workstreams
+
 - **Bug tracking**: Report, query, and update bugs across workstreams
   - `bug_report(project, workstream, description, reported_by?, severity?)` - Report a bug
   - `bug_list(project?, workstream?, status?, reported_by?, severity?)` - List/filter bugs

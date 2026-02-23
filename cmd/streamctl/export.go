@@ -39,13 +39,13 @@ func exportAllWorkstreams(s *store.Store, project, dir string) error {
 	}
 
 	// List all workstreams for this project
-	workstreams, err := s.List(store.Filter{Project: project})
+	result, err := s.List(store.Filter{Project: project})
 	if err != nil {
 		return fmt.Errorf("failed to list workstreams: %w", err)
 	}
 
 	// Export each workstream
-	for _, ws := range workstreams {
+	for _, ws := range result.Workstreams {
 		path := filepath.Join(dir, ws.Name+".md")
 		header := fmt.Sprintf(generatedHeader, ws.Project, ws.Name)
 		content := header + workstream.Render(&ws)

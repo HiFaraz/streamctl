@@ -798,3 +798,91 @@ func TestHandleBugUpdate(t *testing.T) {
 		t.Errorf("Bug status = %q, want 'done'", bugs[0].Status)
 	}
 }
+
+func TestHandleListPagination(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	// Create 5 workstreams
+	for i := 0; i < 5; i++ {
+		st.Create(&workstream.Workstream{
+			Name:       "ws-" + string(rune('a'+i)),
+			Project:    "proj",
+			State:      workstream.StatePending,
+			LastUpdate: time.Now().Add(time.Duration(i) * time.Hour),
+		})
+	}
+
+	h := NewHandlers(st)
+
+	// Get first page with limit 2
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project": "proj",
+				"limit":   float64(2),
+			},
+		},
+	}
+	result, err := h.HandleList(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleList() error = %v", err)
+	}
+
+	content := result.Content[0].(mcp.TextContent).Text
+
+	// Should have "total": 5
+	if !strings.Contains(content, `"total": 5`) {
+		t.Errorf("Should have total=5, got: %s", content)
+	}
+
+	// Should have next_cursor since there are more
+	if !strings.Contains(content, `"next_cursor"`) {
+		t.Errorf("Should have next_cursor, got: %s", content)
+	}
+}
+
+func TestHandleListNameContains(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	st.Create(&workstream.Workstream{Name: "auth-login", Project: "proj", State: workstream.StatePending, LastUpdate: time.Now()})
+	st.Create(&workstream.Workstream{Name: "auth-logout", Project: "proj", State: workstream.StatePending, LastUpdate: time.Now()})
+	st.Create(&workstream.Workstream{Name: "api-users", Project: "proj", State: workstream.StatePending, LastUpdate: time.Now()})
+
+	h := NewHandlers(st)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]any{
+				"project":       "proj",
+				"name_contains": "auth",
+			},
+		},
+	}
+	result, err := h.HandleList(context.Background(), req)
+	if err != nil {
+		t.Fatalf("HandleList() error = %v", err)
+	}
+
+	content := result.Content[0].(mcp.TextContent).Text
+
+	// Should have 2 matches (auth-login and auth-logout)
+	if !strings.Contains(content, `"total": 2`) {
+		t.Errorf("Should have total=2 for auth search, got: %s", content)
+	}
+	if !strings.Contains(content, "auth-login") || !strings.Contains(content, "auth-logout") {
+		t.Errorf("Should contain auth-login and auth-logout, got: %s", content)
+	}
+	if strings.Contains(content, "api-users") {
+		t.Errorf("Should NOT contain api-users, got: %s", content)
+	}
+}

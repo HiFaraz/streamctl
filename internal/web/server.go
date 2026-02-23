@@ -57,7 +57,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workstreams, err := s.store.List(store.Filter{Project: s.project})
+	listResult, err := s.store.List(store.Filter{Project: s.project})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -78,7 +78,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Compute insights
 	var blocked, needsHelp, inProgress []workstream.Workstream
-	for _, ws := range workstreams {
+	for _, ws := range listResult.Workstreams {
 		if ws.State == workstream.StateBlocked || len(ws.BlockedBy) > 0 {
 			blocked = append(blocked, ws)
 		}
@@ -100,7 +100,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		HasMore     bool
 	}{
 		Project:     s.project,
-		Workstreams: workstreams,
+		Workstreams: listResult.Workstreams,
 		Activity:    activity,
 		Blocked:     blocked,
 		NeedsHelp:   needsHelp,
@@ -128,7 +128,7 @@ func (s *Server) handleWorkstream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get all workstreams for sidebar
-	allWorkstreams, err := s.store.List(store.Filter{Project: s.project})
+	allResult, err := s.store.List(store.Filter{Project: s.project})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -141,7 +141,7 @@ func (s *Server) handleWorkstream(w http.ResponseWriter, r *http.Request) {
 	}{
 		Project:        s.project,
 		Workstream:     ws,
-		AllWorkstreams: allWorkstreams,
+		AllWorkstreams: allResult.Workstreams,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -151,7 +151,7 @@ func (s *Server) handleWorkstream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	workstreams, err := s.store.List(store.Filter{Project: s.project})
+	searchResult, err := s.store.List(store.Filter{Project: s.project})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -162,7 +162,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Workstreams []workstream.Workstream
 	}{
 		Project:     s.project,
-		Workstreams: workstreams,
+		Workstreams: searchResult.Workstreams,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

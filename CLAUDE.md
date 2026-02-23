@@ -47,7 +47,7 @@ milestone_requirements (milestone_id, workstream_id)
 
 | Tool | Description |
 |------|-------------|
-| `workstream_list` | List all workstreams, optionally filter by project/state/owner |
+| `workstream_list` | List workstreams with filters, pagination, and search (see below) |
 | `workstream_get` | Get full workstream content (rendered as markdown) |
 | `workstream_create` | Create new workstream |
 | `workstream_update` | Update state, log, tasks, dependencies (see below) |
@@ -62,6 +62,31 @@ milestone_requirements (milestone_id, workstream_id)
 | `bug_list` | List all bugs across workstreams, filter by project/workstream/status/reporter |
 | `bug_report` | Report a bug on a workstream |
 | `bug_update` | Update a bug by ID (status, notes, severity) |
+
+### workstream_list Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `project` | string | Filter by project name |
+| `state` | string | Filter by state: pending, in_progress, blocked, done |
+| `owner` | string | Filter by owner |
+| `name_contains` | string | Search by substring in workstream name (case-insensitive) |
+| `limit` | number | Max results to return (default 20) |
+| `cursor` | string | Cursor for next page (from previous response) |
+
+**Response format:**
+```json
+{
+  "workstreams": [...],
+  "total": 42,
+  "next_cursor": "123"
+}
+```
+
+- Results are ordered by `last_update DESC` (most recent first)
+- Each workstream includes `id` for cursor pagination
+- `next_cursor` is empty when there are no more pages
+- `total` reflects count matching filters (ignoring pagination)
 
 ### workstream_update Parameters
 

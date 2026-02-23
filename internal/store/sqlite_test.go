@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -148,20 +149,20 @@ func TestList(t *testing.T) {
 
 	// List all
 	all, _ := s.List(Filter{})
-	if len(all) != 3 {
-		t.Errorf("List() all = %d, want 3", len(all))
+	if len(all.Workstreams) != 3 {
+		t.Errorf("List() all = %d, want 3", len(all.Workstreams))
 	}
 
 	// Filter by project
 	projOnly, _ := s.List(Filter{Project: "proj"})
-	if len(projOnly) != 2 {
-		t.Errorf("List(project=proj) = %d, want 2", len(projOnly))
+	if len(projOnly.Workstreams) != 2 {
+		t.Errorf("List(project=proj) = %d, want 2", len(projOnly.Workstreams))
 	}
 
 	// Filter by state
 	inProgress, _ := s.List(Filter{State: workstream.StateInProgress})
-	if len(inProgress) != 1 {
-		t.Errorf("List(state=in_progress) = %d, want 1", len(inProgress))
+	if len(inProgress.Workstreams) != 1 {
+		t.Errorf("List(state=in_progress) = %d, want 1", len(inProgress.Workstreams))
 	}
 }
 
@@ -175,8 +176,8 @@ func TestListFilterByOwner(t *testing.T) {
 	s.Create(&workstream.Workstream{Name: "WS3", Project: "proj", State: workstream.StatePending})
 
 	owned, _ := s.List(Filter{Owner: "agent-1"})
-	if len(owned) != 1 {
-		t.Errorf("List(owner=agent-1) = %d, want 1", len(owned))
+	if len(owned.Workstreams) != 1 {
+		t.Errorf("List(owner=agent-1) = %d, want 1", len(owned.Workstreams))
 	}
 }
 
@@ -1217,5 +1218,169 @@ func TestBugSeverity(t *testing.T) {
 
 func ptrTaskStatus(s workstream.TaskStatus) *workstream.TaskStatus {
 	return &s
+}
+
+func TestListOrderByLastUpdateDesc(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create workstreams with different last_update times
+	now := time.Now().UTC()
+	s.Create(&workstream.Workstream{Name: "oldest", Project: "proj", State: workstream.StatePending, LastUpdate: now.Add(-2 * time.Hour)})
+	s.Create(&workstream.Workstream{Name: "middle", Project: "proj", State: workstream.StatePending, LastUpdate: now.Add(-1 * time.Hour)})
+	s.Create(&workstream.Workstream{Name: "newest", Project: "proj", State: workstream.StatePending, LastUpdate: now})
+
+	result, err := s.List(Filter{Project: "proj"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Should be ordered newest first
+	if len(result.Workstreams) != 3 {
+		t.Fatalf("List() returned %d, want 3", len(result.Workstreams))
+	}
+	if result.Workstreams[0].Name != "newest" {
+		t.Errorf("result[0].Name = %q, want 'newest'", result.Workstreams[0].Name)
+	}
+	if result.Workstreams[1].Name != "middle" {
+		t.Errorf("result[1].Name = %q, want 'middle'", result.Workstreams[1].Name)
+	}
+	if result.Workstreams[2].Name != "oldest" {
+		t.Errorf("result[2].Name = %q, want 'oldest'", result.Workstreams[2].Name)
+	}
+}
+
+func TestListCursorPagination(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create 5 workstreams with distinct last_update times
+	now := time.Now().UTC()
+	for i := 0; i < 5; i++ {
+		s.Create(&workstream.Workstream{
+			Name:       fmt.Sprintf("ws-%d", i),
+			Project:    "proj",
+			State:      workstream.StatePending,
+			LastUpdate: now.Add(time.Duration(i) * time.Hour), // ws-4 is newest
+		})
+	}
+
+	// Get first page (limit 2)
+	result, err := s.List(Filter{Project: "proj", Limit: 2})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Workstreams) != 2 {
+		t.Fatalf("List(limit=2) returned %d, want 2", len(result.Workstreams))
+	}
+	if result.Workstreams[0].Name != "ws-4" {
+		t.Errorf("page1[0].Name = %q, want 'ws-4' (newest)", result.Workstreams[0].Name)
+	}
+	if result.Workstreams[1].Name != "ws-3" {
+		t.Errorf("page1[1].Name = %q, want 'ws-3'", result.Workstreams[1].Name)
+	}
+	if result.NextCursor == "" {
+		t.Error("NextCursor should not be empty when there are more results")
+	}
+
+	// Get second page using cursor
+	result2, err := s.List(Filter{Project: "proj", Limit: 2, Cursor: result.NextCursor})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result2.Workstreams) != 2 {
+		t.Fatalf("List(limit=2, cursor) returned %d, want 2", len(result2.Workstreams))
+	}
+	if result2.Workstreams[0].Name != "ws-2" {
+		t.Errorf("page2[0].Name = %q, want 'ws-2'", result2.Workstreams[0].Name)
+	}
+	if result2.Workstreams[1].Name != "ws-1" {
+		t.Errorf("page2[1].Name = %q, want 'ws-1'", result2.Workstreams[1].Name)
+	}
+
+	// Get last page
+	result3, err := s.List(Filter{Project: "proj", Limit: 2, Cursor: result2.NextCursor})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result3.Workstreams) != 1 {
+		t.Fatalf("List(limit=2, cursor) returned %d, want 1", len(result3.Workstreams))
+	}
+	if result3.Workstreams[0].Name != "ws-0" {
+		t.Errorf("page3[0].Name = %q, want 'ws-0' (oldest)", result3.Workstreams[0].Name)
+	}
+	if result3.NextCursor != "" {
+		t.Errorf("NextCursor = %q, want empty (no more pages)", result3.NextCursor)
+	}
+}
+
+func TestListNameContains(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	s.Create(&workstream.Workstream{Name: "auth-login", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "auth-logout", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api-users", Project: "proj", State: workstream.StatePending})
+	s.Create(&workstream.Workstream{Name: "api-auth", Project: "proj", State: workstream.StatePending})
+
+	// Search for "auth"
+	result, err := s.List(Filter{Project: "proj", NameContains: "auth"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Workstreams) != 3 {
+		t.Fatalf("List(nameContains='auth') returned %d, want 3", len(result.Workstreams))
+	}
+
+	// Search for "login" (should match 1)
+	result, err = s.List(Filter{Project: "proj", NameContains: "login"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Workstreams) != 1 {
+		t.Fatalf("List(nameContains='login') returned %d, want 1", len(result.Workstreams))
+	}
+	if result.Workstreams[0].Name != "auth-login" {
+		t.Errorf("result[0].Name = %q, want 'auth-login'", result.Workstreams[0].Name)
+	}
+
+	// Search should be case-insensitive
+	result, err = s.List(Filter{Project: "proj", NameContains: "AUTH"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Workstreams) != 3 {
+		t.Fatalf("List(nameContains='AUTH') returned %d, want 3 (case-insensitive)", len(result.Workstreams))
+	}
+}
+
+func TestListTotal(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, _ := New(dbPath)
+	defer s.Close()
+
+	// Create 5 workstreams
+	for i := 0; i < 5; i++ {
+		s.Create(&workstream.Workstream{
+			Name:    fmt.Sprintf("ws-%d", i),
+			Project: "proj",
+			State:   workstream.StatePending,
+		})
+	}
+
+	// Get first page with limit - Total should reflect all matching, not just returned
+	result, err := s.List(Filter{Project: "proj", Limit: 2})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Workstreams) != 2 {
+		t.Fatalf("List(limit=2) returned %d workstreams, want 2", len(result.Workstreams))
+	}
+	if result.Total != 5 {
+		t.Errorf("Total = %d, want 5 (total matching, not returned)", result.Total)
+	}
 }
 

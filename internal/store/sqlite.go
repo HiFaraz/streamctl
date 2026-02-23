@@ -13,9 +13,19 @@ import (
 
 // Filter for listing workstreams
 type Filter struct {
-	Project string
-	State   workstream.State
-	Owner   string
+	Project      string
+	State        workstream.State
+	Owner        string
+	NameContains string // substring search (case-insensitive)
+	Limit        int    // max results to return (0 = no limit)
+	Cursor       string // cursor for pagination (workstream ID)
+}
+
+// ListResult contains paginated workstream results
+type ListResult struct {
+	Workstreams []workstream.Workstream
+	Total       int    // total matching filter (ignoring pagination)
+	NextCursor  string // cursor for next page (empty if no more)
 }
 
 // WorkstreamUpdate for partial updates
@@ -403,44 +413,79 @@ func (s *Store) ListProjects() ([]string, error) {
 	return projects, nil
 }
 
-// List returns workstreams matching the filter
-func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
-	query := `SELECT id, project, name, state, owner, needs_help, objective, last_update FROM workstreams WHERE 1=1`
+// List returns workstreams matching the filter with cursor-based pagination
+func (s *Store) List(filter Filter) (ListResult, error) {
+	// Build WHERE clause
+	whereClause := "1=1"
 	var args []any
 
 	if filter.Project != "" {
-		query += " AND project = ?"
+		whereClause += " AND project = ?"
 		args = append(args, filter.Project)
 	}
 	if filter.State != "" {
-		query += " AND state = ?"
+		whereClause += " AND state = ?"
 		args = append(args, string(filter.State))
 	}
 	if filter.Owner != "" {
-		query += " AND owner = ?"
+		whereClause += " AND owner = ?"
 		args = append(args, filter.Owner)
 	}
+	if filter.NameContains != "" {
+		whereClause += " AND LOWER(name) LIKE LOWER(?)"
+		args = append(args, "%"+filter.NameContains+"%")
+	}
 
-	query += " ORDER BY project, name"
+	// Get total count (before pagination)
+	var total int
+	countQuery := "SELECT COUNT(*) FROM workstreams WHERE " + whereClause
+	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return ListResult{}, err
+	}
 
-	rows, err := s.db.Query(query, args...)
+	// Build cursor condition for keyset pagination
+	cursorArgs := make([]any, len(args))
+	copy(cursorArgs, args)
+	cursorWhere := whereClause
+
+	if filter.Cursor != "" {
+		// Cursor is the ID of the last item from previous page
+		// We need to get items with (last_update, id) < (cursor's last_update, cursor's id)
+		cursorWhere += ` AND (last_update, id) < (SELECT last_update, id FROM workstreams WHERE id = ?)`
+		cursorArgs = append(cursorArgs, filter.Cursor)
+	}
+
+	// Build query with ordering and limit
+	query := `SELECT id, project, name, state, owner, needs_help, objective, last_update
+		FROM workstreams WHERE ` + cursorWhere + ` ORDER BY last_update DESC, id DESC`
+
+	// Add limit (+1 to detect if there are more pages)
+	fetchLimit := filter.Limit
+	if fetchLimit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", fetchLimit+1)
+	}
+
+	rows, err := s.db.Query(query, cursorArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult{}, err
 	}
 	defer rows.Close()
 
 	var results []workstream.Workstream
+	var lastID int64
 	for rows.Next() {
 		var ws workstream.Workstream
 		var wsID int64
 		if err := rows.Scan(&wsID, &ws.Project, &ws.Name, &ws.State, &ws.Owner, &ws.NeedsHelp, &ws.Objective, &ws.LastUpdate); err != nil {
-			return nil, err
+			return ListResult{}, err
 		}
+		ws.ID = wsID
+		lastID = wsID
 
-		// Load plan items
+		// Load plan items (skip for list - optimization)
 		planRows, err := s.db.Query(`SELECT text, complete, status, notes, is_bug, reported_by FROM plan_items WHERE workstream_id = ? ORDER BY position`, wsID)
 		if err != nil {
-			return nil, err
+			return ListResult{}, err
 		}
 		for planRows.Next() {
 			var item workstream.PlanItem
@@ -449,10 +494,10 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 		}
 		planRows.Close()
 
-		// Load log entries
+		// Load log entries (skip for list - optimization)
 		logRows, err := s.db.Query(`SELECT timestamp, content FROM log_entries WHERE workstream_id = ? ORDER BY timestamp DESC`, wsID)
 		if err != nil {
-			return nil, err
+			return ListResult{}, err
 		}
 		for logRows.Next() {
 			var entry workstream.LogEntry
@@ -464,7 +509,20 @@ func (s *Store) List(filter Filter) ([]workstream.Workstream, error) {
 		results = append(results, ws)
 	}
 
-	return results, nil
+	// Determine next cursor
+	var nextCursor string
+	if fetchLimit > 0 && len(results) > fetchLimit {
+		// We fetched one extra - there are more pages
+		results = results[:fetchLimit] // trim to actual limit
+		lastID = results[len(results)-1].ID
+		nextCursor = fmt.Sprintf("%d", lastID)
+	}
+
+	return ListResult{
+		Workstreams: results,
+		Total:       total,
+		NextCursor:  nextCursor,
+	}, nil
 }
 
 // Update applies partial updates to a workstream

@@ -130,7 +130,7 @@ func runList(st *store.Store) {
 		}
 	}
 
-	workstreams, err := st.List(filter)
+	result, err := st.List(filter)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -139,7 +139,7 @@ func runList(st *store.Store) {
 	// Output as JSON
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(workstreams)
+	enc.Encode(result.Workstreams)
 }
 
 func runExport(st *store.Store) {

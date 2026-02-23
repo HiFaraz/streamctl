@@ -57,6 +57,7 @@ type Dependency struct {
 
 // Workstream represents a parsed workstream markdown file
 type Workstream struct {
+	ID         int64  // Database ID (for cursor pagination)
 	Name       string // From H1: "# Workstream: NAME"
 	Project    string // Directory name (e.g., "fleetadm")
 	FilePath   string // Full path to .md file
